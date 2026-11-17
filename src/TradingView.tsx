@@ -2,9 +2,12 @@ import React, { useEffect } from "react";
 import { useAccount } from "wagmi";
 import { CircleDollarSign, Droplets, Gauge } from "lucide-react";
 import { TradingGrid } from "./TradingGrid";
-import { useGameStore } from "./store";
+import { useGameStore, type Ticker } from "./store";
 import { useOrderControllerGetUserOrders } from "./services/queries";
 import { HowItWorksModal } from "./HowItWorksModal";
+
+const TICKERS: readonly Ticker[] = ["NVDA", "TSLA"];
+const STAKE_CHIPS = [1, 5, 10, 25] as const;
 
 const ACCENT = "#2D84EB";
 const SECONDARY = "#4F46E5";
@@ -23,6 +26,10 @@ const formatUsd = (value: number) =>
   }).format(value);
 
 export const TradingView: React.FC = () => {
+  const ticker = useGameStore((state) => state.ticker);
+  const setTicker = useGameStore((state) => state.setTicker);
+  const feedStale = useGameStore((state) => state.feedStale);
+  const isStale = feedStale[ticker] ?? false;
   const ensureCells = useGameStore((state) => state.ensureCells);
   const tickTime = useGameStore((state) => state.tickTime);
   const setOpenBets = useGameStore((state) => state.setOpenBets);
@@ -98,21 +105,50 @@ export const TradingView: React.FC = () => {
               Trading Desk
             </h1>
             <p className="text-xs text-white/45">
-              Live BTC grid execution and position sizing controls
+              {ticker} · Hyperliquid mark price
             </p>
           </div>
         </div>
 
         <div className="flex items-center gap-2 text-xs text-white/55">
+          <div
+            role="group"
+            aria-label="Select ticker"
+            className="inline-flex items-center gap-1 rounded-xl border border-white/10 bg-white/[0.03] p-1"
+          >
+            {TICKERS.map((item) => {
+              const active = ticker === item;
+              return (
+                <button
+                  key={item}
+                  type="button"
+                  onClick={() => setTicker(item)}
+                  aria-pressed={active}
+                  className="rounded-lg px-3 py-1 text-xs font-semibold transition"
+                  style={{
+                    background: active
+                      ? `linear-gradient(135deg, ${ACCENT} 0%, ${SECONDARY} 58%, ${DEEP} 100%)`
+                      : "transparent",
+                    color: active ? "#ffffff" : "rgba(255,255,255,0.65)",
+                  }}
+                >
+                  {item}
+                </button>
+              );
+            })}
+          </div>
+
           <span
             className="rounded-md border px-2.5 py-1.5"
             style={{
-              borderColor: BORDER,
-              background: "rgba(45,132,235,0.16)",
-              color: "#b7d7ff",
+              borderColor: isStale ? "rgba(245,158,11,0.4)" : BORDER,
+              background: isStale
+                ? "rgba(245,158,11,0.14)"
+                : "rgba(45,132,235,0.16)",
+              color: isStale ? "#fcd34d" : "#b7d7ff",
             }}
           >
-            Live
+            {isStale ? "Paused" : "Live"}
           </span>
         </div>
       </section>
@@ -134,10 +170,13 @@ export const TradingView: React.FC = () => {
             }}
           />
           <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-white/45">
-            BTC Price
+            {ticker} Price
           </p>
           <p className="mt-2 text-[1.65rem] font-bold tracking-[-0.04em] text-white">
             ${formatUsd(currentPrice)}
+          </p>
+          <p className="mt-1.5 text-xs text-white/55">
+            {ticker} · Hyperliquid mark price
           </p>
         </div>
 
@@ -195,7 +234,7 @@ export const TradingView: React.FC = () => {
             </span>
           </div>
           <div className="mt-3 flex flex-wrap gap-1.5">
-            {[10, 25, 50, 100].map((value) => {
+            {STAKE_CHIPS.map((value) => {
               const active = betAmount === value;
 
               return (
@@ -250,6 +289,10 @@ export const TradingView: React.FC = () => {
           <TradingGrid />
         </div>
       </section>
+
+      <p className="text-center text-[11px] text-white/40">
+        Testnet game. Test USDC has no value. Not available to US persons. 18+.
+      </p>
     </div>
   );
 };

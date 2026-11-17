@@ -1,6 +1,10 @@
 import { create } from "zustand";
 import toast from "react-hot-toast";
 import type { Socket } from "socket.io-client";
+import { rejectMessage, type RejectReason } from "./lib/rejectReasons";
+
+export type Ticker = "NVDA" | "TSLA";
+
 export interface PricePoint {
   time: number; // timestamp
   price: number;
@@ -10,9 +14,9 @@ export interface CellData {
   id: string;
   timeWindowStart: number;
   timeWindowEnd: number;
-  priceLevel: number; // The price band (e.g. 50020, 50040)
+  priceLevel: number; // The price band (e.g. 157.515)
   multiplier: number;
-  status: "active" | "past" | "hit";
+  status: "active" | "past" | "hit" | "voided" | "miss";
   original: RemoteCell;
 }
 
@@ -27,7 +31,120 @@ export interface RemoteCell {
   gridSignature: string;
 }
 
+export interface GridUpdatePayload {
+  ticker: Ticker | string;
+  gridTs?: number;
+  priceStep?: string | number;
+  cells: RemoteCell[];
+}
+
+export interface OrderUpdatePayload {
+  ticker?: string;
+  marketId?: string;
+  cellId?: string;
+  cellTimeStart?: number;
+  cellTimeEnd?: number;
+  startTs?: number;
+  endTs?: number;
+  lowerPrice?: string;
+  upperPrice?: string;
+  rewardRate?: string;
+  amount?: string | number;
+  status?: string;
+  reason?: RejectReason;
+  settledWin?: boolean | string;
+  cell?: Partial<RemoteCell>;
+}
+
+export function isCellTappable(
+  cell: CellData,
+  syncedNow: number,
+  options: {
+    hasBet?: boolean;
+    feedStale?: boolean;
+    lockWindowMs?: number;
+  } = {},
+): boolean {
+  if (options.feedStale || options.hasBet) return false;
+  const lockWindowMs = options.lockWindowMs ?? 5000;
+  return (
+    cell.timeWindowStart > syncedNow &&
+    cell.timeWindowStart - syncedNow > lockWindowMs
+  );
+}
+
+function buildCellId(
+  ticker: string | undefined,
+  start: number | string | undefined,
+  end: number | string | undefined,
+  lower: string | number | undefined,
+  upper: string | number | undefined,
+): string {
+  return ticker
+    ? `${ticker}:${start}:${end}:${lower}:${upper}`
+    : `${start}:${end}:${lower}:${upper}`;
+}
+
+function resolveOrderCellId(
+  data: OrderUpdatePayload,
+  state: Pick<GameState, "cells" | "bets" | "pendingBets">,
+): string {
+  const ticker = data.ticker || data.cell?.ticker || data.marketId;
+  const start = data.cellTimeStart || data.cell?.startTs || data.startTs;
+  const end = data.cellTimeEnd || data.cell?.endTs || data.endTs;
+  const lower = data.lowerPrice ?? data.cell?.lowerPrice;
+  const upper = data.upperPrice ?? data.cell?.upperPrice;
+
+  if (
+    data.cellId &&
+    (start === undefined ||
+      end === undefined ||
+      lower === undefined ||
+      upper === undefined)
+  ) {
+    return String(data.cellId);
+  }
+
+  const exactId = buildCellId(ticker, start, end, lower, upper);
+  if (
+    state.bets[exactId] !== undefined ||
+    state.pendingBets[exactId] !== undefined ||
+    state.cells.some((c) => c.id === exactId)
+  ) {
+    return exactId;
+  }
+
+  if (start !== undefined && end !== undefined) {
+    const startNum = Number(start);
+    const endNum = Number(end);
+    const lowerNum = lower !== undefined ? parseFloat(String(lower)) : NaN;
+    const upperNum = upper !== undefined ? parseFloat(String(upper)) : NaN;
+
+    const matchedCell = state.cells.find((c) => {
+      if (ticker && c.original.ticker !== ticker) return false;
+      if (c.timeWindowStart !== startNum || c.timeWindowEnd !== endNum) {
+        return false;
+      }
+      if (Number.isFinite(lowerNum) && Number.isFinite(upperNum)) {
+        return (
+          Math.abs(parseFloat(c.original.lowerPrice) - lowerNum) < 1e-6 &&
+          Math.abs(parseFloat(c.original.upperPrice) - upperNum) < 1e-6
+        );
+      }
+      return Boolean(state.bets[c.id] || state.pendingBets[c.id]);
+    });
+
+    if (matchedCell) {
+      return matchedCell.id;
+    }
+  }
+
+  return exactId;
+}
+
 interface GameState {
+  ticker: Ticker;
+  feedStale: Record<Ticker, boolean>;
   balance: number;
   serverBalance: number;
   currentPrice: number;
@@ -37,6 +154,10 @@ interface GameState {
   nextSessionTime: number;
   modeIntervalSeconds: number;
   modePriceStep: number;
+  priceStepByTicker: Record<string, number>;
+  priceByTicker: Record<string, number>;
+  historyByTicker: Record<string, PricePoint[]>;
+  basePriceByTicker: Record<string, number>;
   bets: Record<string, number>;
   betRates: Record<string, number>;
   pendingBets: Record<string, number>;
@@ -45,24 +166,32 @@ interface GameState {
   wssKey: string | null;
   betAmount: number;
   serverTimeOffset: number; // diff between server ts and local Date.now()
+  lastRejectMessage: string | null;
 
+  setTicker: (ticker: Ticker) => void;
+  setFeedStale: (ticker: Ticker | string, stale: boolean) => void;
   setConnection: (socket: Socket | null, wssKey: string | null) => void;
-  updatePrice: (price: number, serverTs?: number) => void;
+  updatePrice: (
+    price: number | string,
+    serverTs?: number,
+    ticker?: Ticker | string,
+  ) => void;
   syncServerTime: (serverTs: number) => void;
   placeBet: (cellId: string, amount: number) => void;
   ensureCells: () => void;
   tickTime: () => void;
-  updateGrid: (newCells: RemoteCell[]) => void;
+  updateGrid: (payload: GridUpdatePayload | RemoteCell[]) => void;
   updateBalance: (balance: number) => void;
   setBetAmount: (amount: number) => void;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   setOpenBets: (orders: any[]) => void;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  updateOrder: (data: any) => void;
+  updateOrder: (data: OrderUpdatePayload) => string | undefined;
   checkWinEffects: (now: number) => void;
 }
 
 export const useGameStore = create<GameState>((set) => ({
+  ticker: "NVDA",
+  feedStale: { NVDA: false, TSLA: false },
   balance: 1000.0,
   serverBalance: 1000.0,
   currentPrice: 0,
@@ -71,15 +200,37 @@ export const useGameStore = create<GameState>((set) => ({
   basePrice: 0, // Anchor point for the grid
   nextSessionTime: Date.now() + 60000,
   modeIntervalSeconds: 5,
-  modePriceStep: 25,
+  modePriceStep: 0.03,
+  priceStepByTicker: { NVDA: 0.03, TSLA: 0.05 },
+  priceByTicker: {},
+  historyByTicker: {},
+  basePriceByTicker: {},
   bets: {},
   betRates: {},
   pendingBets: {},
   pendingWins: {},
   socket: null,
   wssKey: null,
-  betAmount: 10,
+  betAmount: 5,
   serverTimeOffset: 0,
+  lastRejectMessage: null,
+
+  setTicker: (ticker) =>
+    set((state) => ({
+      ticker,
+      modePriceStep: state.priceStepByTicker[ticker] ?? state.modePriceStep,
+      currentPrice: state.priceByTicker[ticker] ?? 0,
+      history: state.historyByTicker[ticker] ?? [],
+      basePrice: state.basePriceByTicker[ticker] ?? 0,
+    })),
+
+  setFeedStale: (ticker, stale) =>
+    set((state) => ({
+      feedStale: {
+        ...state.feedStale,
+        [ticker]: stale,
+      },
+    })),
 
   setConnection: (socket, wssKey) => set({ socket, wssKey }),
 
@@ -116,9 +267,7 @@ export const useGameStore = create<GameState>((set) => ({
           const end = order.cellTimeEnd || order.cell?.endTs || order.endTs;
           const lower = order.lowerPrice || order.cell?.lowerPrice;
           const upper = order.upperPrice || order.cell?.upperPrice;
-          const cellId = ticker
-            ? `${ticker}:${start}:${end}:${lower}:${upper}`
-            : `${start}:${end}:${lower}:${upper}`;
+          const cellId = buildCellId(ticker, start, end, lower, upper);
           newBets[cellId] = Number(order.amount) || 0;
 
           const rate = order.rewardRate || order.cell?.rewardRate;
@@ -130,26 +279,74 @@ export const useGameStore = create<GameState>((set) => ({
       return { bets: newBets, betRates: newBetRates };
     }),
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  updateOrder: (data: any) =>
+  updateOrder: (data: OrderUpdatePayload) => {
+    let rejectedMessage: string | undefined;
+
     set((state) => {
       let newState = { ...state };
+      let cellId = resolveOrderCellId(data, newState);
 
-      const ticker = data.ticker || data.cell?.ticker || data.marketId;
-      const start = data.cellTimeStart || data.cell?.startTs || data.startTs;
-      const end = data.cellTimeEnd || data.cell?.endTs || data.endTs;
-      const lower = data.lowerPrice || data.cell?.lowerPrice;
-      const upper = data.upperPrice || data.cell?.upperPrice;
-      let cellId = ticker
-        ? `${ticker}:${start}:${end}:${lower}:${upper}`
-        : `${start}:${end}:${lower}:${upper}`;
+      if (data.status === "REJECTED") {
+        const newPendingBets = { ...newState.pendingBets };
+        const refundedStake = newPendingBets[cellId] ?? 0;
+        delete newPendingBets[cellId];
+
+        const message = rejectMessage(data.reason);
+        rejectedMessage = message;
+
+        toast.error(message, {
+          style: {
+            background: "#252422",
+            color: "#f6465d",
+            border: "1px solid rgba(246, 70, 93, 0.5)",
+          },
+        });
+
+        return {
+          ...newState,
+          pendingBets: newPendingBets,
+          serverBalance: newState.serverBalance + refundedStake,
+          balance: newState.balance + refundedStake,
+          lastRejectMessage: message,
+        };
+      }
+
+      if (data.status === "VOIDED") {
+        const newPendingBets = { ...newState.pendingBets };
+        const pendingStake = newPendingBets[cellId] ?? 0;
+        delete newPendingBets[cellId];
+
+        const newPendingWins = { ...newState.pendingWins };
+        delete newPendingWins[cellId];
+
+        const existingBet =
+          newState.bets[cellId] ??
+          (pendingStake > 0 ? pendingStake : Number(data.amount) || 0);
+        const newBets =
+          existingBet > 0
+            ? { ...newState.bets, [cellId]: existingBet }
+            : newState.bets;
+
+        return {
+          ...newState,
+          pendingBets: newPendingBets,
+          pendingWins: newPendingWins,
+          bets: newBets,
+          cells: newState.cells.map((c) =>
+            c.id === cellId ? { ...c, status: "voided" as const } : c,
+          ),
+          balance:
+            newState.serverBalance -
+            Object.values(newPendingWins).reduce((a, b) => a + b, 0),
+        };
+      }
 
       if (data.status === "OPEN") {
+        const pendingAmount = newState.pendingBets[cellId] ?? 0;
         const newPendingBets = { ...newState.pendingBets };
         delete newPendingBets[cellId];
 
-        const confirmedAmount =
-          Number(data.amount) || newState.pendingBets[cellId] || 0;
+        const confirmedAmount = Number(data.amount) || pendingAmount || 0;
 
         const newBetRates = { ...newState.betRates };
         const rewardRate = data.rewardRate || data.cell?.rewardRate;
@@ -189,6 +386,8 @@ export const useGameStore = create<GameState>((set) => ({
       if (isWin) {
         let cell = newState.cells.find((c) => c.id === cellId);
         // Failsafe approximate match in case price float precision caused ID mismatch
+        const start = data.cellTimeStart || data.cell?.startTs || data.startTs;
+        const end = data.cellTimeEnd || data.cell?.endTs || data.endTs;
         if (!cell && start && end) {
           cell = newState.cells.find(
             (c) =>
@@ -224,9 +423,35 @@ export const useGameStore = create<GameState>((set) => ({
               Object.values(newPendingWins).reduce((a, b) => a + b, 0),
           };
         }
+        return newState;
       }
+
+      const isLoss =
+        (data.status === "SETTLED" && !isWin) ||
+        data.status === "LOSS" ||
+        data.status === "LOST" ||
+        data.status === "MISSED";
+
+      if (isLoss) {
+        const newPendingBets = { ...newState.pendingBets };
+        delete newPendingBets[cellId];
+
+        newState = {
+          ...newState,
+          pendingBets: newPendingBets,
+          cells: newState.cells.map((c) =>
+            c.id === cellId && c.status !== "hit" && c.status !== "voided"
+              ? { ...c, status: "miss" as const }
+              : c,
+          ),
+        };
+      }
+
       return newState;
-    }),
+    });
+
+    return rejectedMessage;
+  },
 
   checkWinEffects: (now: number) =>
     set((state) => {
@@ -315,31 +540,50 @@ export const useGameStore = create<GameState>((set) => ({
       return state;
     }),
 
-  updatePrice: (price, serverTs) =>
+  updatePrice: (price, serverTs, ticker) =>
     set((state) => {
+      const numericPrice =
+        typeof price === "number" ? price : parseFloat(price);
+      if (!Number.isFinite(numericPrice)) return state;
+
+      const targetTicker = ticker ?? state.ticker;
       const now = Date.now();
       let newOffset = state.serverTimeOffset;
 
-      if (serverTs) {
-        const rawOffset = serverTs - now;
-        if (state.serverTimeOffset === 0) {
-          newOffset = rawOffset;
-        } else {
-          // EMA to smooth out network latency jitter
-          newOffset = state.serverTimeOffset * 0.95 + rawOffset * 0.05;
-        }
+      if (serverTs && state.serverTimeOffset === 0) {
+        newOffset = serverTs - now;
       }
       const syncedNow = now + newOffset;
 
-      // Keep history of last 120 seconds for smooth scrolling
-      const newHistory = [...state.history, { time: syncedNow, price }].filter(
-        (p) => syncedNow - p.time <= 120000,
-      );
+      const existingHistory = state.historyByTicker[targetTicker] ?? [];
+      const newTickerHistory = [
+        ...existingHistory,
+        { time: syncedNow, price: numericPrice },
+      ].filter((p) => syncedNow - p.time <= 120000);
+
+      const nextPriceByTicker = {
+        ...state.priceByTicker,
+        [targetTicker]: numericPrice,
+      };
+      const nextHistoryByTicker = {
+        ...state.historyByTicker,
+        [targetTicker]: newTickerHistory,
+      };
+
+      if (targetTicker === state.ticker) {
+        return {
+          currentPrice: numericPrice,
+          history: newTickerHistory,
+          serverTimeOffset: newOffset,
+          priceByTicker: nextPriceByTicker,
+          historyByTicker: nextHistoryByTicker,
+        };
+      }
 
       return {
-        currentPrice: price,
-        history: newHistory,
         serverTimeOffset: newOffset,
+        priceByTicker: nextPriceByTicker,
+        historyByTicker: nextHistoryByTicker,
       };
     }),
 
@@ -371,15 +615,51 @@ export const useGameStore = create<GameState>((set) => ({
     // No API for old chart data, wait for socket to populate history
   },
 
-  updateGrid: (newCells) =>
+  updateGrid: (payload) =>
     set((state) => {
-      const now = Date.now();
+      const incomingCells = Array.isArray(payload)
+        ? payload
+        : (payload.cells ?? []);
+      const payloadTicker = Array.isArray(payload)
+        ? incomingCells[0]?.ticker
+        : payload.ticker;
+      const payloadGridTs = Array.isArray(payload)
+        ? incomingCells[0]?.gridTs
+        : (payload.gridTs ?? incomingCells[0]?.gridTs);
+      const rawStep = Array.isArray(payload) ? undefined : payload.priceStep;
+      const parsedStep =
+        rawStep !== undefined ? Number(rawStep) : Number.NaN;
+
+      const newOffset =
+        payloadGridTs !== undefined
+          ? payloadGridTs - Date.now()
+          : state.serverTimeOffset;
+      const now = Date.now() + newOffset;
+
+      const nextPriceStepByTicker = { ...state.priceStepByTicker };
+      if (payloadTicker && Number.isFinite(parsedStep) && parsedStep > 0) {
+        nextPriceStepByTicker[payloadTicker] = parsedStep;
+      }
+
+      const nextBasePriceByTicker = { ...state.basePriceByTicker };
+      if (payloadTicker && incomingCells.length > 0) {
+        const anchor = parseFloat(incomingCells[0].lowerPrice);
+        if (Number.isFinite(anchor)) {
+          nextBasePriceByTicker[payloadTicker] = anchor;
+        }
+      }
 
       const remoteIds = new Set<string>();
       const combinedCells = [...state.cells];
 
-      for (const remoteCell of newCells) {
-        const id = `${remoteCell.ticker}:${remoteCell.startTs}:${remoteCell.endTs}:${remoteCell.lowerPrice}:${remoteCell.upperPrice}`;
+      for (const remoteCell of incomingCells) {
+        const id = buildCellId(
+          remoteCell.ticker,
+          remoteCell.startTs,
+          remoteCell.endTs,
+          remoteCell.lowerPrice,
+          remoteCell.upperPrice,
+        );
         const timeWindowStart = remoteCell.startTs;
         const timeWindowEnd = remoteCell.endTs;
         const priceLevel =
@@ -426,30 +706,47 @@ export const useGameStore = create<GameState>((set) => ({
       }
 
       // Filter out cells that are obsolete (older than 60s)
-      // And remove any active future cell that the server no longer broadcasted
-      // BUT: never remove cells that have bets (confirmed or pending) — keep them until resolved
+      // And remove active future cells of payloadTicker that the server no longer broadcasted
+      // BUT: never replace cells belonging to other tickers, and never remove cells that have bets
       const finalCells = combinedCells.filter((c) => {
         const hasBetOnCell =
           (state.bets[c.id] && state.bets[c.id] > 0) ||
           (state.pendingBets[c.id] && state.pendingBets[c.id] > 0) ||
           state.pendingWins[c.id] !== undefined;
+        const sameTicker =
+          !payloadTicker || c.original.ticker === payloadTicker;
         if (
+          sameTicker &&
           c.status === "active" &&
           c.timeWindowStart > now &&
           !remoteIds.has(c.id) &&
-          !hasBetOnCell // Don't discard cells the user has bet on
+          !hasBetOnCell
         ) {
-          return false; // Safely discard missing future predictions
+          return false;
         }
         return c.timeWindowEnd > now - 60000;
       });
 
-      return { cells: finalCells };
+      const isActiveTicker = !payloadTicker || payloadTicker === state.ticker;
+      return {
+        cells: finalCells,
+        serverTimeOffset: newOffset,
+        priceStepByTicker: nextPriceStepByTicker,
+        basePriceByTicker: nextBasePriceByTicker,
+        modePriceStep:
+          isActiveTicker && payloadTicker
+            ? (nextPriceStepByTicker[payloadTicker] ?? state.modePriceStep)
+            : state.modePriceStep,
+        basePrice:
+          isActiveTicker && payloadTicker
+            ? (nextBasePriceByTicker[payloadTicker] ?? state.basePrice)
+            : state.basePrice,
+      };
     }),
 
   tickTime: () =>
     set((state) => {
-      const now = Date.now();
+      const now = Date.now() + state.serverTimeOffset;
       const cutoff = now - 60000;
 
       // Filter out very old cells (older than 60s)

@@ -24,7 +24,7 @@ import {
 import { type Abi, formatUnits, parseUnits } from "viem";
 import { toast } from "react-hot-toast";
 import { baseSepolia } from "./config/chains";
-import { ADDRESSES } from "./contracts/addresses";
+import { getAddresses, type ContractAddresses } from "./contracts/addresses";
 import tap2StacksVaultAbi from "./contracts/abi/Tap2StacksVault.json";
 import {
   TOKEN_DECIMALS,
@@ -151,7 +151,16 @@ function safeParseUnits(value: string, decimals: number) {
   }
 }
 
+function resolveContractAddresses(): ContractAddresses | null {
+  try {
+    return getAddresses();
+  } catch {
+    return null;
+  }
+}
+
 export const WalletView: React.FC = () => {
+  const contracts = resolveContractAddresses();
   const { address, isConnected, chain } = useAccount();
   const { switchChainAsync, isPending: isPendingSwitch } = useSwitchChain();
   const [activeTab, setActiveTab] = useState<TabKey>("deposit");
@@ -378,6 +387,11 @@ export const WalletView: React.FC = () => {
   }, [claimTxHash, isClaimSuccess, refreshAll]);
 
   const handleDeposit = async () => {
+    if (!contracts) {
+      toast.error("Contracts not deployed yet");
+      return;
+    }
+
     const onBaseSepolia = await ensureBaseSepolia();
     if (!onBaseSepolia) return;
 
@@ -394,7 +408,7 @@ export const WalletView: React.FC = () => {
     pendingDepositAmountRef.current = depositAmountStr;
 
     writeDepositTrader({
-      address: ADDRESSES.vault,
+      address: contracts.vault,
       abi: VAULT_ABI,
       functionName: "depositTrader",
       value: depositTokenAmountRaw,
@@ -402,6 +416,11 @@ export const WalletView: React.FC = () => {
   };
 
   const handleWithdraw = async () => {
+    if (!contracts) {
+      toast.error("Contracts not deployed yet");
+      return;
+    }
+
     const onBaseSepolia = await ensureBaseSepolia();
     if (!onBaseSepolia) return;
 
@@ -432,7 +451,7 @@ export const WalletView: React.FC = () => {
     }
 
     writeClaimTrader({
-      address: ADDRESSES.vault,
+      address: contracts.vault,
       abi: VAULT_ABI,
       functionName: "claimTrader",
       args: [withdrawTokenAmountRaw],
@@ -586,7 +605,9 @@ export const WalletView: React.FC = () => {
                 },
                 {
                   label: "Reserve Contract",
-                  value: `${ADDRESSES.vault.slice(0, 8)}...${ADDRESSES.vault.slice(-6)}`,
+                  value: contracts
+                    ? `${contracts.vault.slice(0, 8)}...${contracts.vault.slice(-6)}`
+                    : "Not deployed",
                   icon: ShieldCheck,
                 },
                 { label: "Current Rail", value: activeRailLabel, icon: Coins },
@@ -637,158 +658,181 @@ export const WalletView: React.FC = () => {
             </div>
           </div>
 
-          <div className="mt-4 space-y-2">
+          {!contracts ? (
             <div
-              className="rounded-xl border p-3"
+              className="mt-4 rounded-xl border p-6 text-center"
               style={{
                 borderColor: BORDER,
                 background: "rgba(255,255,255,0.02)",
               }}
             >
-              <div className="flex items-center justify-between text-xs text-white/55">
-                <span>From</span>
-                <button
-                  type="button"
-                  onClick={isDepositFlow ? handleMaxDeposit : handleMaxWithdraw}
-                  className="rounded-md border px-2 py-1 text-[11px] font-medium text-white/75 transition hover:text-white"
-                  style={{ borderColor: BORDER, background: SUBTLE_BG }}
-                >
-                  Max
-                </button>
-              </div>
-              <div className="mt-3 flex items-center gap-2">
-                <input
-                  type="number"
-                  min="0"
-                  step={isDepositFlow ? "0.001" : "1"}
-                  value={fromAmount}
-                  onChange={(event) =>
-                    isDepositFlow
-                      ? setDepositAmountStr(event.target.value)
-                      : setWithdrawInAppStr(event.target.value)
-                  }
-                  placeholder="0"
-                  className="min-w-0 flex-1 bg-transparent text-left text-3xl font-semibold tracking-tight text-white outline-none placeholder:text-white/25"
-                />
-                <span
-                  className="inline-flex items-center gap-1 rounded-md border px-2 py-1 text-xs font-semibold"
-                  style={{ borderColor: BORDER, background: SUBTLE_BG }}
-                >
-                  {isDepositFlow ? (
-                    <Wallet size={13} style={{ color: ACCENT }} />
-                  ) : (
-                    <Coins size={13} style={{ color: ACCENT }} />
-                  )}
-                  {fromAsset}
-                </span>
-              </div>
-              <p className="mt-2 text-xs text-white/55">
-                Balance: {fromAssetBalance}
+              <p className="text-sm font-semibold text-white">
+                Contracts not deployed yet
+              </p>
+              <p className="mt-1.5 text-xs text-white/55">
+                On-chain deposit and withdrawal forms will appear once contract
+                addresses are configured. Use the dev top-up button in the
+                header for local testing.
               </p>
             </div>
+          ) : (
+            <>
+              <div className="mt-4 space-y-2">
+                <div
+                  className="rounded-xl border p-3"
+                  style={{
+                    borderColor: BORDER,
+                    background: "rgba(255,255,255,0.02)",
+                  }}
+                >
+                  <div className="flex items-center justify-between text-xs text-white/55">
+                    <span>From</span>
+                    <button
+                      type="button"
+                      onClick={
+                        isDepositFlow ? handleMaxDeposit : handleMaxWithdraw
+                      }
+                      className="rounded-md border px-2 py-1 text-[11px] font-medium text-white/75 transition hover:text-white"
+                      style={{ borderColor: BORDER, background: SUBTLE_BG }}
+                    >
+                      Max
+                    </button>
+                  </div>
+                  <div className="mt-3 flex items-center gap-2">
+                    <input
+                      type="number"
+                      min="0"
+                      step={isDepositFlow ? "0.001" : "1"}
+                      value={fromAmount}
+                      onChange={(event) =>
+                        isDepositFlow
+                          ? setDepositAmountStr(event.target.value)
+                          : setWithdrawInAppStr(event.target.value)
+                      }
+                      placeholder="0"
+                      className="min-w-0 flex-1 bg-transparent text-left text-3xl font-semibold tracking-tight text-white outline-none placeholder:text-white/25"
+                    />
+                    <span
+                      className="inline-flex items-center gap-1 rounded-md border px-2 py-1 text-xs font-semibold"
+                      style={{ borderColor: BORDER, background: SUBTLE_BG }}
+                    >
+                      {isDepositFlow ? (
+                        <Wallet size={13} style={{ color: ACCENT }} />
+                      ) : (
+                        <Coins size={13} style={{ color: ACCENT }} />
+                      )}
+                      {fromAsset}
+                    </span>
+                  </div>
+                  <p className="mt-2 text-xs text-white/55">
+                    Balance: {fromAssetBalance}
+                  </p>
+                </div>
 
-            <div className="flex justify-center">
-              <button
-                type="button"
-                onClick={handleToggleDirection}
-                className="inline-flex h-10 w-10 items-center justify-center rounded-xl border text-white/70 transition hover:text-white"
-                style={{ borderColor: BORDER, background: SUBTLE_BG }}
-                aria-label="Switch swap direction"
-              >
-                <ArrowDownUp size={16} />
-              </button>
-            </div>
+                <div className="flex justify-center">
+                  <button
+                    type="button"
+                    onClick={handleToggleDirection}
+                    className="inline-flex h-10 w-10 items-center justify-center rounded-xl border text-white/70 transition hover:text-white"
+                    style={{ borderColor: BORDER, background: SUBTLE_BG }}
+                    aria-label="Switch swap direction"
+                  >
+                    <ArrowDownUp size={16} />
+                  </button>
+                </div>
 
-            <div
-              className="rounded-xl border p-3"
-              style={{
-                borderColor: BORDER,
-                background: "rgba(255,255,255,0.02)",
-              }}
-            >
-              <div className="flex items-center justify-between text-xs text-white/55">
-                <span>To (Estimated)</span>
+                <div
+                  className="rounded-xl border p-3"
+                  style={{
+                    borderColor: BORDER,
+                    background: "rgba(255,255,255,0.02)",
+                  }}
+                >
+                  <div className="flex items-center justify-between text-xs text-white/55">
+                    <span>To (Estimated)</span>
+                  </div>
+                  <div className="mt-3 flex items-center justify-between gap-2">
+                    <p className="text-3xl font-semibold tracking-tight text-white">
+                      {toAmount}
+                    </p>
+                    <span
+                      className="inline-flex items-center gap-1 rounded-md border px-2 py-1 text-xs font-semibold"
+                      style={{ borderColor: BORDER, background: SUBTLE_BG }}
+                    >
+                      {isDepositFlow ? (
+                        <Coins size={13} style={{ color: ACCENT }} />
+                      ) : (
+                        <Wallet size={13} style={{ color: ACCENT }} />
+                      )}
+                      {toAsset}
+                    </span>
+                  </div>
+                  <p className="mt-2 text-xs text-white/55">
+                    Balance: {toAssetBalance}
+                  </p>
+                </div>
               </div>
-              <div className="mt-3 flex items-center justify-between gap-2">
-                <p className="text-3xl font-semibold tracking-tight text-white">
-                  {toAmount}
+
+              {activeTab === "deposit" && isInsufficientDeposit ? (
+                <p className="mt-3 text-right text-xs text-[#ff8ca0]">
+                  Deposit amount exceeds connected wallet balance.
                 </p>
-                <span
-                  className="inline-flex items-center gap-1 rounded-md border px-2 py-1 text-xs font-semibold"
-                  style={{ borderColor: BORDER, background: SUBTLE_BG }}
-                >
-                  {isDepositFlow ? (
-                    <Coins size={13} style={{ color: ACCENT }} />
-                  ) : (
-                    <Wallet size={13} style={{ color: ACCENT }} />
-                  )}
-                  {toAsset}
-                </span>
+              ) : null}
+              {activeTab === "withdraw" && isInsufficientWithdraw ? (
+                <p className="mt-3 text-right text-xs text-[#ff8ca0]">
+                  Requested amount exceeds your in-app balance.
+                </p>
+              ) : null}
+
+              <div className="mt-4">
+                {chainMismatch ? (
+                  <ActionButton
+                    onClick={() =>
+                      void switchChainAsync?.({ chainId: baseSepolia.id })
+                    }
+                    disabled={isPendingSwitch}
+                    pending={isPendingSwitch}
+                    pendingLabel="SWITCHING NETWORK"
+                    idleLabel={`SWITCH TO ${baseSepolia.name.toUpperCase()}`}
+                  />
+                ) : activeTab === "deposit" ? (
+                  <ActionButton
+                    onClick={handleDeposit}
+                    disabled={
+                      !isConnected ||
+                      depositPending ||
+                      !isValidDepositAmount ||
+                      isInsufficientDeposit
+                    }
+                    pending={depositPending}
+                    pendingLabel="PROCESSING DEPOSIT"
+                    idleLabel={
+                      isConnected
+                        ? `DEPOSIT ${NATIVE_SYMBOL}`
+                        : "CONNECT WALLET TO DEPOSIT"
+                    }
+                  />
+                ) : (
+                  <ActionButton
+                    onClick={handleWithdraw}
+                    disabled={
+                      !isConnected ||
+                      withdrawPending ||
+                      !isValidWithdrawAmount ||
+                      isInsufficientWithdraw
+                    }
+                    pending={withdrawPending}
+                    pendingLabel="PROCESSING WITHDRAWAL"
+                    idleLabel={
+                      isConnected
+                        ? `WITHDRAW ${NATIVE_SYMBOL}`
+                        : "CONNECT WALLET TO WITHDRAW"
+                    }
+                  />
+                )}
               </div>
-              <p className="mt-2 text-xs text-white/55">
-                Balance: {toAssetBalance}
-              </p>
-            </div>
-          </div>
-
-          {activeTab === "deposit" && isInsufficientDeposit ? (
-            <p className="mt-3 text-right text-xs text-[#ff8ca0]">
-              Deposit amount exceeds connected wallet balance.
-            </p>
-          ) : null}
-          {activeTab === "withdraw" && isInsufficientWithdraw ? (
-            <p className="mt-3 text-right text-xs text-[#ff8ca0]">
-              Requested amount exceeds your in-app balance.
-            </p>
-          ) : null}
-
-          <div className="mt-4">
-            {chainMismatch ? (
-              <ActionButton
-                onClick={() =>
-                  void switchChainAsync?.({ chainId: baseSepolia.id })
-                }
-                disabled={isPendingSwitch}
-                pending={isPendingSwitch}
-                pendingLabel="SWITCHING NETWORK"
-                idleLabel={`SWITCH TO ${baseSepolia.name.toUpperCase()}`}
-              />
-            ) : activeTab === "deposit" ? (
-              <ActionButton
-                onClick={handleDeposit}
-                disabled={
-                  !isConnected ||
-                  depositPending ||
-                  !isValidDepositAmount ||
-                  isInsufficientDeposit
-                }
-                pending={depositPending}
-                pendingLabel="PROCESSING DEPOSIT"
-                idleLabel={
-                  isConnected
-                    ? `DEPOSIT ${NATIVE_SYMBOL}`
-                    : "CONNECT WALLET TO DEPOSIT"
-                }
-              />
-            ) : (
-              <ActionButton
-                onClick={handleWithdraw}
-                disabled={
-                  !isConnected ||
-                  withdrawPending ||
-                  !isValidWithdrawAmount ||
-                  isInsufficientWithdraw
-                }
-                pending={withdrawPending}
-                pendingLabel="PROCESSING WITHDRAWAL"
-                idleLabel={
-                  isConnected
-                    ? `WITHDRAW ${NATIVE_SYMBOL}`
-                    : "CONNECT WALLET TO WITHDRAW"
-                }
-              />
-            )}
-          </div>
+            </>
+          )}
         </div>
       </section>
     </div>

@@ -1,5 +1,4 @@
 import React, { useEffect, useRef, useState } from "react";
-import { Dialog, DialogPanel } from "@headlessui/react";
 import { useQueryClient } from "@tanstack/react-query";
 import CryptoJS from "crypto-js";
 import { Link, useLocation } from "react-router-dom";
@@ -32,26 +31,25 @@ const NAV_ITEMS = [
   { label: "Proofs", path: "/proofs" },
 ] as const;
 
-const ACCENT = "#2D84EB";
-const SECONDARY = "#4F46E5";
-const DEEP = "#00156E";
-
 function HeaderButton({
   label,
   onClick,
   variant = "secondary",
   badge,
+  disabled = false,
 }: {
   label: string;
   onClick: () => void;
   variant?: "secondary" | "primary";
   badge?: string;
+  disabled?: boolean;
 }) {
   return (
     <button
       type="button"
       onClick={onClick}
-      className="inline-flex h-10 items-center gap-2 rounded-xl px-4 text-sm font-medium transition"
+      disabled={disabled}
+      className="inline-flex h-10 items-center gap-2 rounded-xl px-4 text-sm font-medium transition disabled:cursor-not-allowed disabled:opacity-60"
       style={{
         background:
           variant === "primary"
@@ -81,6 +79,7 @@ function HeaderButton({
 export const Header: React.FC = () => {
   const updatePrice = useGameStore((state) => state.updatePrice);
   const updateGrid = useGameStore((state) => state.updateGrid);
+  const setFeedStale = useGameStore((state) => state.setFeedStale);
   const setConnection = useGameStore((state) => state.setConnection);
   const updateOrder = useGameStore((state) => state.updateOrder);
   const updateBalance = useGameStore((state) => state.updateBalance);
@@ -98,8 +97,6 @@ export const Header: React.FC = () => {
   const [token, setToken] = useState<string | null>(
     localStorage.getItem("token"),
   );
-  const [isFundModalOpen, setIsFundModalOpen] = useState(false);
-  const [timeRemaining, setTimeRemaining] = useState<number>(0);
   const [isFunding, setIsFunding] = useState(false);
 
   const promptedAddress = useRef<string | null>(null);
@@ -128,31 +125,33 @@ export const Header: React.FC = () => {
     }
   }, [balanceData, updateBalance]);
 
-  useEffect(() => {
-    let interval: ReturnType<typeof setInterval>;
+  const handleDevTopUp = async () => {
+    const authToken = localStorage.getItem("token") ?? token;
+    if (!authToken || isFunding) return;
 
-    const checkTime = () => {
-      const storedTime = localStorage.getItem("last-fund-time");
-      if (!storedTime) {
-        setTimeRemaining(0);
-        return;
+    setIsFunding(true);
+    try {
+      const response = await fetch(`${BACKEND_URL}/api/payment/debug/deposit`, {
+        method: "POST",
+        headers: {
+          accept: "*/*",
+          Authorization: `Bearer ${authToken}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ amount: 100 }),
+      });
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
       }
-
-      const lastTime = parseInt(storedTime, 10);
-      const targetTime = lastTime + 30 * 60 * 1000;
-      const now = Date.now();
-      setTimeRemaining(Math.max(targetTime - now, 0));
-    };
-
-    if (isFundModalOpen) {
-      checkTime();
-      interval = setInterval(checkTime, 1000);
+      toast.success("Added 100 test credits");
+      refetchBalance();
+    } catch (error) {
+      console.error("Deposit failed:", error);
+      toast.error("Failed to add test credits");
+    } finally {
+      setIsFunding(false);
     }
-
-    return () => {
-      if (interval) clearInterval(interval);
-    };
-  }, [isFundModalOpen]);
+  };
 
   const handleLogin = async () => {
     if (!isConnected || !address || isLoggingIn.current) return;
@@ -248,16 +247,29 @@ export const Header: React.FC = () => {
           "balance_update",
           "order_update",
           "price_now",
+          "feed_health",
         ] as const;
 
         events.forEach((eventName) => {
           socket?.on(eventName, (data) => {
             switch (eventName) {
               case "price_now":
-                if (data?.price) updatePrice(data.price, data.ts);
+                if (data?.price !== undefined) {
+                  updatePrice(data.price, data.ts, data.ticker);
+                }
                 break;
               case "grid_update":
-                if (Array.isArray(data)) updateGrid(data);
+                if (
+                  Array.isArray(data) ||
+                  (data && Array.isArray(data.cells))
+                ) {
+                  updateGrid(data);
+                }
+                break;
+              case "feed_health":
+                if (data?.ticker) {
+                  setFeedStale(data.ticker, Boolean(data.stale));
+                }
                 break;
               case "balance_update":
                 if (data) {
@@ -265,6 +277,9 @@ export const Header: React.FC = () => {
                     getAccountControllerGetBalanceQueryKey(),
                     data,
                   );
+                  if (typeof data.free !== "undefined") {
+                    updateBalance(Number(data.free));
+                  }
                 }
                 break;
               case "order_update":
@@ -288,7 +303,9 @@ export const Header: React.FC = () => {
     address,
     queryClient,
     setConnection,
+    setFeedStale,
     token,
+    updateBalance,
     updateGrid,
     updateOrder,
     updatePrice,
@@ -390,8 +407,11 @@ export const Header: React.FC = () => {
             ) : (
               <>
                 <HeaderButton
-                  label="Faucet"
-                  onClick={() => setIsFundModalOpen(true)}
+                  label={
+                    isFunding ? "Funding..." : "Get 100 test credits (dev)"
+                  }
+                  onClick={() => void handleDevTopUp()}
+                  disabled={isFunding}
                 />
                 <div className="relative">
                   <button
@@ -477,88 +497,6 @@ export const Header: React.FC = () => {
           })}
         </nav>
       </div>
-
-      <Dialog
-        open={isFundModalOpen}
-        onClose={() => setIsFundModalOpen(false)}
-        className="relative z-50"
-      >
-        <div
-          className="fixed inset-0 bg-black/70 backdrop-blur-sm"
-          aria-hidden="true"
-        />
-        <div className="fixed inset-0 flex items-center justify-center p-4">
-          <DialogPanel className="relative mx-4 w-full max-w-md rounded-2xl border border-white/10 bg-[linear-gradient(160deg,rgba(14,21,42,0.98)_0%,rgba(8,11,21,0.98)_100%)] p-6 shadow-[0_24px_80px_rgba(0,0,0,0.45)]">
-            <button
-              type="button"
-              onClick={() => setIsFundModalOpen(false)}
-              className="absolute right-4 top-4 text-white/50 transition hover:text-white"
-            >
-              x
-            </button>
-
-            <h2 className="text-lg font-bold text-white">Faucet account</h2>
-            <p className="mt-2 text-sm leading-6 text-white/65">
-              Claim $100 in test funds. Additional requests unlock every 30
-              minutes.
-            </p>
-
-            <div className="mt-6">
-              {timeRemaining > 0 ? (
-                <div className="rounded-2xl border border-white/8 bg-white/4 px-5 py-4 text-center font-mono text-lg text-white">
-                  Next in {Math.floor(timeRemaining / 1000 / 60)}:
-                  {String(Math.floor((timeRemaining / 1000) % 60)).padStart(
-                    2,
-                    "0",
-                  )}
-                </div>
-              ) : (
-                <button
-                  type="button"
-                  onClick={async () => {
-                    const authToken = localStorage.getItem("token");
-                    if (!authToken) return;
-
-                    setIsFunding(true);
-                    try {
-                      await fetch(`${BACKEND_URL}/api/payment/debug/deposit`, {
-                        method: "POST",
-                        headers: {
-                          accept: "*/*",
-                          Authorization: `Bearer ${authToken}`,
-                          "Content-Type": "application/json",
-                        },
-                        body: JSON.stringify({
-                          amount: "100",
-                          txHash: `0x${Date.now()}`,
-                          logIndex: 2,
-                        }),
-                      });
-                      localStorage.setItem(
-                        "last-fund-time",
-                        Date.now().toString(),
-                      );
-                      refetchBalance();
-                    } catch (error) {
-                      console.error("Deposit failed:", error);
-                    } finally {
-                      setIsFunding(false);
-                    }
-                  }}
-                  disabled={isFunding}
-                  className="flex w-full items-center justify-center gap-2 rounded-2xl px-5 py-4 text-sm font-semibold uppercase tracking-[0.16em] text-white transition disabled:opacity-50"
-                  style={{
-                    background: `linear-gradient(135deg, ${ACCENT} 0%, ${SECONDARY} 58%, ${DEEP} 100%)`,
-                    boxShadow: "0 16px 34px rgba(45,132,235,0.24)",
-                  }}
-                >
-                  {isFunding ? "Funding..." : "Fund $100 now"}
-                </button>
-              )}
-            </div>
-          </DialogPanel>
-        </div>
-      </Dialog>
     </header>
   );
 };

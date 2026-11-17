@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
-import { useGameStore, type CellData } from "./store";
+import { isCellTappable, useGameStore, type CellData } from "./store";
+import { rejectMessage } from "./lib/rejectReasons";
 import { format } from "date-fns";
 import { clsx } from "clsx";
 import { twMerge } from "tailwind-merge";
@@ -39,7 +40,11 @@ function fireWinConfetti(
 }
 
 export const TradingGrid: React.FC = () => {
+  const ticker = useGameStore((state) => state.ticker);
+  const feedStale = useGameStore((state) => state.feedStale);
+  const isStale = feedStale[ticker] ?? false;
   const cells = useGameStore((state) => state.cells);
+  const tickerCells = cells.filter((c) => c.original.ticker === ticker);
   const history = useGameStore((state) => state.history);
   const basePrice = useGameStore((state) => state.basePrice);
   const currentPrice = useGameStore((state) => state.currentPrice);
@@ -60,7 +65,9 @@ export const TradingGrid: React.FC = () => {
 
   const containerRef = useRef<HTMLDivElement>(null);
   const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
-  const [now, setNow] = useState(() => Date.now());
+  const [now, setNow] = useState(
+    () => Date.now() + useGameStore.getState().serverTimeOffset,
+  );
   const [cameraPrice, setCameraPrice] = useState(currentPrice);
   const [isMobile, setIsMobile] = useState(() => window.innerWidth < 640);
   const [isSmallScreen, setIsSmallScreen] = useState(
@@ -90,7 +97,7 @@ export const TradingGrid: React.FC = () => {
   useEffect(() => {
     const newWinIds: string[] = [];
 
-    cells.forEach((cell) => {
+    tickerCells.forEach((cell) => {
       const isHit = cell.status === "hit";
       const hasBet =
         (bets[cell.id] || 0) > 0 || (pendingBets[cell.id] || 0) > 0;
@@ -156,7 +163,7 @@ export const TradingGrid: React.FC = () => {
         });
       });
     }
-  }, [cells, bets, pendingBets]);
+  }, [tickerCells, bets, pendingBets]);
 
   // Animation loop for perfect smooth scrolling
   useEffect(() => {
@@ -165,12 +172,17 @@ export const TradingGrid: React.FC = () => {
 
     // Use a mutable variable for smooth interpolation to avoid dependencies and stale state
     let currentCameraPrice = useGameStore.getState().currentPrice;
+    let lastTicker = useGameStore.getState().ticker;
 
     const loop = () => {
       const n = Date.now();
-      const target = useGameStore.getState().currentPrice;
+      const storeState = useGameStore.getState();
+      const target = storeState.currentPrice;
 
-      if (currentCameraPrice === 0 && target !== 0) {
+      if (storeState.ticker !== lastTicker) {
+        lastTicker = storeState.ticker;
+        currentCameraPrice = target;
+      } else if (currentCameraPrice === 0 && target !== 0) {
         currentCameraPrice = target;
       } else {
         currentCameraPrice += (target - currentCameraPrice) * 0.1; // Smooth camera tracking, snappier follow
@@ -198,10 +210,14 @@ export const TradingGrid: React.FC = () => {
 
   const handlePlaceBet = (cell: CellData, canBet: boolean) => {
     try {
+      if (isStale) {
+        toast.error(rejectMessage("FEED_PAUSED"));
+        return;
+      }
       if (cell.timeWindowStart > now && cell.timeWindowStart - now <= 5000) {
         const hasBet = bets[cell.id] || pendingBets[cell.id];
         if (!hasBet) {
-          toast("Cell closing soon. Select another!", {
+          toast(rejectMessage("WINDOW_CLOSING"), {
             icon: "⏳",
             style: {
               background: "rgba(18, 20, 30, 0.95)",
@@ -295,7 +311,7 @@ export const TradingGrid: React.FC = () => {
 
           const payload = {
             userId: address,
-            marketId: cellOrigin.ticker,
+            marketId: cellOrigin.ticker || ticker,
             amount: amountStr,
             cell: cellOrigin,
             userSignature: signature,
@@ -338,9 +354,16 @@ export const TradingGrid: React.FC = () => {
       window.removeEventListener("resize", updateSize);
       cancelAnimationFrame(frameId);
     };
-  }, [cells.length]);
+  }, [tickerCells.length, isStale]);
 
-  if (cells.length === 0) return null;
+  if (tickerCells.length === 0 && !isStale) return null;
+
+  const effectiveCameraPrice =
+    cameraPrice !== 0
+      ? cameraPrice
+      : currentPrice !== 0
+        ? currentPrice
+        : tickerCells[0]?.priceLevel ?? 0;
 
   // Time & Price Span — current line sits ~36% from left, rest is bettable future
   // Mobile (<640px):  ~10s past history + 25s future (5 cols)
@@ -353,17 +376,19 @@ export const TradingGrid: React.FC = () => {
   const firstTime = now - pastSpanMs;
   const lastTime = now + futureSpanMs;
 
-  const priceSpan = 9; // 9 rows (-4 to 4) matches backend data
-  const maxPrice = cameraPrice + 4.5 * modePriceStep;
-  const minPrice = cameraPrice - 4.5 * modePriceStep;
+  const priceSpan = 11; // 11 rows (-5 to +5) centred on price
+  const maxPrice = effectiveCameraPrice + 5.5 * modePriceStep;
+  const minPrice = effectiveCameraPrice - 5.5 * modePriceStep;
   const totalPriceSpan = maxPrice - minPrice;
 
   // Horizontal price levels
   const priceLevels: number[] = [];
-  const startLevelIdx = Math.floor((minPrice - basePrice) / modePriceStep) - 1;
-  const endLevelIdx = Math.ceil((maxPrice - basePrice) / modePriceStep) + 1;
-  for (let i = startLevelIdx; i <= endLevelIdx; i++) {
-    priceLevels.push(basePrice + i * modePriceStep);
+  if (modePriceStep > 0 && effectiveCameraPrice > 0) {
+    const startLevelIdx = Math.floor((minPrice - basePrice) / modePriceStep) - 1;
+    const endLevelIdx = Math.ceil((maxPrice - basePrice) / modePriceStep) + 1;
+    for (let i = startLevelIdx; i <= endLevelIdx; i++) {
+      priceLevels.push(basePrice + i * modePriceStep);
+    }
   }
 
   // Percentage Helpers
@@ -428,7 +453,7 @@ export const TradingGrid: React.FC = () => {
                 className="absolute right-1"
                 style={{ top: "50%", transform: "translateY(-50%)" }}
               >
-                ${p.toFixed(1)}
+                ${p.toFixed(2)}
               </span>
             </div>
           );
@@ -437,7 +462,10 @@ export const TradingGrid: React.FC = () => {
 
       <div
         ref={containerRef}
-        className="flex-1 relative overflow-hidden mr-10 sm:mr-14"
+        className={cn(
+          "flex-1 relative overflow-hidden mr-10 sm:mr-14 transition-[filter,opacity] duration-200",
+          isStale && "grayscale opacity-60",
+        )}
         style={{
           background: "#060910",
           border: "1px solid rgba(255, 255, 255, 0.08)",
@@ -483,7 +511,7 @@ export const TradingGrid: React.FC = () => {
 
         {/* Main Grid Cells */}
         {(() => {
-          return cells.map((cell) => {
+          return tickerCells.map((cell) => {
             // Optimization: skip rendering cells fully out of viewport
             if (
               cell.timeWindowEnd < firstTime ||
@@ -493,23 +521,28 @@ export const TradingGrid: React.FC = () => {
 
             const isPast = now >= cell.timeWindowEnd;
             const isHit = cell.status === "hit";
+            const isVoided = cell.status === "voided";
             const betAmountVal = bets[cell.id] || 0;
             const pendingBetAmountVal = pendingBets[cell.id] || 0;
             const hasBet = betAmountVal > 0;
             const isPending = pendingBetAmountVal > 0;
             const hasAnyBet = hasBet || isPending;
+            const hasPendingWin = pendingWins[cell.id] !== undefined;
+            const isMiss =
+              cell.status === "miss" ||
+              (isPast && hasAnyBet && !isHit && !isVoided && !hasPendingWin);
             const displayBetAmount = hasBet
               ? betAmountVal
               : pendingBetAmountVal;
-            const isSelected = !isPast && hasAnyBet;
+            const isSelected = !isPast && hasAnyBet && !isVoided && !isMiss;
             const hasWon = isHit && hasAnyBet;
             const showThunder = Boolean(thunderCells[cell.id]);
             const showSelectedEffect = isSelected && !hasWon;
             const showWinState = hasWon && !showThunder;
 
-            // Hide past cells (unless user has a bet on them)
-            const hasPendingWin = pendingWins[cell.id] !== undefined;
-            if (isPast && !isHit && !hasPendingWin) return null;
+            // Hide past cells (unless user has a bet outcome to display)
+            if (isPast && !isHit && !hasPendingWin && !isVoided && !isMiss)
+              return null;
 
             const left = getTimeX(cell.timeWindowStart);
             const top = getPriceY(cell.priceLevel + modePriceStep / 2);
@@ -517,7 +550,11 @@ export const TradingGrid: React.FC = () => {
 
             const intervalMs = 5000;
             const isNext = isFuture && cell.timeWindowStart - now <= intervalMs;
-            const canBet = isFuture && !isNext && !hasAnyBet;
+            const canBet = isCellTappable(cell, now, {
+              hasBet: hasAnyBet,
+              feedStale: isStale,
+              lockWindowMs: intervalMs,
+            });
 
             return (
               <div
@@ -535,8 +572,10 @@ export const TradingGrid: React.FC = () => {
                     "opacity-30 cursor-not-allowed animate-pulse",
                   showSelectedEffect &&
                     "cursor-pointer z-10 trading-grid-cell-selected",
-                  !isPast && isPending && "animate-pulse",
+                  !isPast && isPending && !isVoided && "animate-pulse",
                   isHit && hasAnyBet && "z-20",
+                  isMiss && "opacity-45 transition-opacity duration-500 z-10",
+                  isVoided && "z-10",
                 )}
                 style={{
                   left: `${left}%`,
@@ -547,11 +586,15 @@ export const TradingGrid: React.FC = () => {
                   background:
                     hasWon
                       ? "rgba(46,189,133,0.35)"
-                      : !isPast && hasAnyBet
-                        ? "linear-gradient(180deg, rgba(31, 49, 108, 0.35) 0%, rgba(16, 29, 72, 0.5) 100%)"
-                        : isNext && !hasAnyBet
-                          ? "rgba(246,70,93,0.06)"
-                          : undefined,
+                      : isVoided
+                        ? "rgba(245, 158, 11, 0.14)"
+                        : isMiss
+                          ? "rgba(255, 255, 255, 0.03)"
+                          : !isPast && hasAnyBet
+                            ? "linear-gradient(180deg, rgba(31, 49, 108, 0.35) 0%, rgba(16, 29, 72, 0.5) 100%)"
+                            : isNext && !hasAnyBet
+                              ? "rgba(246,70,93,0.06)"
+                              : undefined,
                   boxShadow:
                     hasWon
                       ? "0 0 20px rgba(46,189,133,0.5), inset 0 0 30px rgba(46,189,133,0.35)"
@@ -561,9 +604,11 @@ export const TradingGrid: React.FC = () => {
                   outline:
                     hasWon
                       ? "1px solid #2EBD85"
-                      : showSelectedEffect
-                        ? "1px solid #2D84EB"
-                        : undefined,
+                      : isVoided
+                        ? "1px solid rgba(245, 158, 11, 0.5)"
+                        : showSelectedEffect
+                          ? "1px solid #2D84EB"
+                          : undefined,
                   ["--selected-cell-stripe-color" as string]:
                     "rgba(129, 140, 248, 0.36)",
                   ["--selected-cell-stripe-soft" as string]:
@@ -596,25 +641,31 @@ export const TradingGrid: React.FC = () => {
                   )}
                   style={{
                     color:
-                      hasAnyBet && !isHit
+                      hasAnyBet && !isHit && !isVoided && !isMiss
                         ? ACCENT
                         : hasWon
                           ? "#2EBD85"
-                        : isNext && !hasAnyBet
-                            ? "#F6465D"
-                            : cell.multiplier >= 100
-                              ? "#F6465D"
-                              : cell.multiplier >= 10
-                                ? SECONDARY
-                                : DIM_TEXT,
+                          : isVoided
+                            ? "#FBBF24"
+                            : isMiss
+                              ? "rgba(255,255,255,0.45)"
+                              : isNext && !hasAnyBet
+                                ? "#F6465D"
+                                : cell.multiplier >= 100
+                                  ? "#F6465D"
+                                  : cell.multiplier >= 10
+                                    ? SECONDARY
+                                    : DIM_TEXT,
                     textShadow:
                       hasWon
                         ? "0 0 8px rgba(46,189,133,1)"
-                        : hasAnyBet
+                        : hasAnyBet && !isVoided && !isMiss
                           ? "0 0 6px rgba(45, 132, 235, 0.9)"
                           : undefined,
                     transform:
-                      hasAnyBet || hasWon ? "scale(1.1)" : undefined,
+                      (hasAnyBet && !isVoided && !isMiss) || hasWon
+                        ? "scale(1.1)"
+                        : undefined,
                   }}
                 >
                   {hasAnyBet
@@ -622,7 +673,7 @@ export const TradingGrid: React.FC = () => {
                     : Number(cell.original.rewardRate).toFixed(2)}
                   x
                 </div>
-                {hasAnyBet && !isHit && (
+                {hasAnyBet && !isHit && !isVoided && !isMiss && (
                   <div
                     className={cn(
                       "relative z-[1] text-[9px] sm:text-[10px] mt-0.5 sm:mt-1 font-bold px-1.5 sm:px-2 py-0.5 shadow-md",
@@ -637,6 +688,25 @@ export const TradingGrid: React.FC = () => {
                     }}
                   >
                     ${displayBetAmount}
+                  </div>
+                )}
+                {isVoided && (
+                  <div className="relative z-[1] mt-0.5 flex flex-col items-center gap-0.5">
+                    <span className="rounded bg-amber-500/20 px-1.5 py-0.5 text-[8px] sm:text-[9px] font-bold uppercase tracking-wider text-amber-300">
+                      Refunded
+                    </span>
+                    {displayBetAmount > 0 && (
+                      <span className="text-[9px] text-amber-200/80">
+                        ${displayBetAmount}
+                      </span>
+                    )}
+                  </div>
+                )}
+                {isMiss && !isVoided && (
+                  <div className="relative z-[1] mt-0.5 flex flex-col items-center gap-0.5">
+                    <span className="text-[9px] font-semibold uppercase tracking-wider text-white/50">
+                      Miss
+                    </span>
                   </div>
                 )}
                 {showWinState &&
@@ -715,6 +785,22 @@ export const TradingGrid: React.FC = () => {
             {/* Fade Out Edge on Left */}
             <rect x="0" y="0" width="12%" height="100%" fill="url(#fadeLeft)" />
           </svg>
+        )}
+
+        {isStale && (
+          <div
+            data-testid="stale-feed-overlay"
+            className="absolute inset-0 z-40 flex items-center justify-center bg-[#060910]/70 backdrop-blur-[2px]"
+          >
+            <div className="rounded-xl border border-amber-400/40 bg-[#121622]/95 px-5 py-3 text-center shadow-xl">
+              <p className="text-sm font-semibold text-amber-300">
+                Price feed paused
+              </p>
+              <p className="mt-1 text-xs text-white/60">
+                Taps are disabled until {ticker} prices resume.
+              </p>
+            </div>
+          </div>
         )}
       </div>
 

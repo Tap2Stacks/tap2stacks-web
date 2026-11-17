@@ -3,12 +3,15 @@ import { bounds, drawBoard, type BoardScene } from './draw';
 import { createChartClock } from './clock';
 import { createSmoothValue } from './smooth';
 import { cellRect, priceToY, timeToX, type BoardViewport } from './layout';
+import { createDrawnSeries } from './drawnSeries';
+import { visibleCells } from './retainedCells';
 import { seriesFor, shouldRedraw } from './priceSeries';
 type State = ReturnType<typeof useGameStore.getState>;
 export class BoardRuntime {
     viewport: BoardViewport | null = null;
     private clock = createChartClock();
     private head = createSmoothValue();
+    private drawn = createDrawnSeries();
     private center = createSmoothValue(400);
     private size = { width: 1000, height: 600 };
     private frame = 0;
@@ -72,6 +75,7 @@ export class BoardRuntime {
     private prepare(state: State, now: number, perf: number) {
         if (this.lastTicker !== state.ticker) {
             this.head.reset();
+            this.drawn.reset();
             this.center.reset();
             this.lastTs = 0;
             this.lastTicker = state.ticker;
@@ -96,12 +100,9 @@ export class BoardRuntime {
         const animating = Object.values(state.stacks).some(s => s.ticker === state.ticker && s.coins.some(c => Date.now() - (c.updatedAt ?? c.placedAt) < 650));
         if (!this.dirty && this.lastCells === state.cells && this.lastStacks === state.stacks && this.previous && !shouldRedraw(this.previous, next) && Math.abs(live - target) < .000001 && !animating && !this.flash())
             return;
-        // Only committed samples precede the eased live head: no squared steps or raw tick kink.
-        const committed = Math.abs(live - target) < .000001 ? points : points.slice(0, -1);
-        const line = committed.filter(p => p.ts < now).map(p => ({ x: timeToX(v, p.ts), y: priceToY(v, p.price) }));
-        if (target > 0)
-            line.push({ x: v.width * .3, y: priceToY(v, live) });
-        const cells = state.cells.filter(c => c.original.ticker === state.ticker);
+        const smoothed = this.drawn.sample(points, now, live, perf, !!this.reduced?.matches);
+        const line = smoothed.map(p => ({x: timeToX(v, p.ts), y: priceToY(v, p.price)}));
+        const cells = visibleCells(state.cells, state.ticker, v);
         drawBoard(this.ctx, { viewport: v, cells, line, livePrice: live, stacks: state.stacks, flash: this.flash() ? {...this.flash()!, untilMs: this.flash()!.untilMs + state.serverTimeOffset} : undefined, animationNowMs: Date.now(), reducedMotion: !!this.reduced?.matches });
         this.previous = next;
         this.dirty = false;

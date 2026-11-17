@@ -674,7 +674,6 @@ export const useGameStore = create<GameState>((set) => ({
         }
       }
 
-      const remoteIds = new Set<string>();
       const combinedCells = [...state.cells];
 
       for (const remoteCell of incomingCells) {
@@ -706,7 +705,6 @@ export const useGameStore = create<GameState>((set) => ({
           }
         }
 
-        remoteIds.add(id);
 
         if (existingIdx === -1) {
           combinedCells.push({
@@ -730,27 +728,10 @@ export const useGameStore = create<GameState>((set) => ({
         }
       }
 
-      // Filter out cells that are obsolete (older than 60s)
-      // And remove active future cells of payloadTicker that the server no longer broadcasted
-      // BUT: never replace cells belonging to other tickers, and never remove cells that have bets
-      const finalCells = combinedCells.filter((c) => {
-        const hasBetOnCell =
-          (state.bets[c.id] && state.bets[c.id] > 0) ||
-          (state.pendingBets[c.id] && state.pendingBets[c.id] > 0) ||
-          state.pendingWins[c.id] !== undefined;
-        const sameTicker =
-          !payloadTicker || c.original.ticker === payloadTicker;
-        if (
-          sameTicker &&
-          c.status === "active" &&
-          c.timeWindowStart > now &&
-          !remoteIds.has(c.id) &&
-          !hasBetOnCell
-        ) {
-          return false;
-        }
-        return c.timeWindowEnd > now - 60000;
-      });
+      // The quote stream removes a cell when it locks. Keep its last quote so
+      // its window and coins remain visible as the line enters and passes it.
+      // Canvas culls at the left edge; the store retains a bounded 60 s history.
+      const finalCells = combinedCells.filter(c => c.timeWindowEnd > now - 60000);
 
       const isActiveTicker = !payloadTicker || payloadTicker === state.ticker;
       return {

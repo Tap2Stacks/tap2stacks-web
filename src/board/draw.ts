@@ -66,12 +66,34 @@ function flash(ctx: CanvasRenderingContext2D, scene: BoardScene) {
     curve(ctx, scene.line);
     ctx.restore();
 }
+function rowGuides(
+  ctx: CanvasRenderingContext2D,
+  cells: CellData[],
+  v: BoardViewport,
+): void {
+  const prices = new Set(
+    cells.flatMap((cell) => [
+      Number(cell.original.lowerPrice),
+      Number(cell.original.upperPrice),
+    ]),
+  );
+  ctx.fillStyle = THEME.ink;
+  ctx.globalAlpha = 0.08;
+  for (const price of prices) {
+    const y = priceToY(v, price);
+    if (y >= 0 && y <= v.height) {
+      ctx.fillRect(0, y, v.width, 0.5);
+    }
+  }
+  ctx.globalAlpha = 1;
+}
 export function drawBoard(ctx: CanvasRenderingContext2D, scene: BoardScene): void {
     const { viewport: v } = scene;
     ctx.save();
     ctx.globalAlpha = 1;
     ctx.fillStyle = THEME.paper;
     ctx.fillRect(0, 0, v.width, v.height);
+    rowGuides(ctx, scene.cells, v);
     for (const cell of scene.cells) {
         drawCell(ctx, cell, v);
         const stack = scene.stacks[cell.id];

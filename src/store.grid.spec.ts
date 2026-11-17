@@ -23,7 +23,11 @@ vi.mock("wagmi", () => ({
     isConnected: true,
     chain: { id: 84532, name: "Base Sepolia" },
   }),
-  useBalance: () => ({ data: undefined, refetch: vi.fn() }),
+  useConfig: () => ({ chains: [{ id: 84532 }] }),
+  useCapabilities: () => ({ data: undefined }),
+  useReadContracts: () => ({ data: undefined, refetch: vi.fn() }),
+  useSendCalls: () => ({ sendCallsAsync: vi.fn() }),
+  useSendTransaction: () => ({ sendTransactionAsync: vi.fn() }),
   useConnect: () => ({ connect: vi.fn(), connectors: [] }),
   useDisconnect: () => ({ disconnect: vi.fn() }),
   useSignMessage: () => ({ signMessageAsync: vi.fn() }),
@@ -32,11 +36,8 @@ vi.mock("wagmi", () => ({
     switchChainAsync: vi.fn(),
     isPending: false,
   }),
-  useWaitForTransactionReceipt: () => ({ isLoading: false, isSuccess: false }),
   useWriteContract: () => ({
-    writeContract: vi.fn(),
-    data: undefined,
-    isPending: false,
+    writeContractAsync: vi.fn(),
   }),
 }));
 
@@ -370,13 +371,13 @@ describe("stock grid UI components", () => {
     vi.restoreAllMocks();
   });
 
-  it("WalletView does not crash when VITE_* contract addresses are missing and shows Contracts not deployed yet", () => {
+  it("WalletView does not crash when VITE_* contract addresses are missing and shows On-chain wallet not set up yet", () => {
     vi.stubEnv("VITE_TUSDC_ADDRESS", "");
     vi.stubEnv("VITE_VAULT_ADDRESS", "");
     vi.stubEnv("VITE_PROOF_ANCHOR_ADDRESS", "");
 
     render(createElement(WalletView));
-    expect(screen.getByText("Contracts not deployed yet")).toBeTruthy();
+    expect(screen.getByText("On-chain wallet not set up yet")).toBeTruthy();
   });
 
   it("Header faucet button posts { amount: 100 } without txHash to /api/payment/debug/deposit", () => {

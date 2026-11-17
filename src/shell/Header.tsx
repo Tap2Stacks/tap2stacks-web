@@ -303,11 +303,13 @@ export const Header: React.FC<HeaderProps> = ({ bellSlot }) => {
             />
           ) : (
             <>
-              <HeaderButton
-                label={isFunding ? "Funding..." : "Get 100 test credits (dev)"}
-                onClick={() => void handleDevTopUp()}
-                disabled={isFunding}
-              />
+              {import.meta.env.DEV ? (
+                <HeaderButton
+                  label={isFunding ? "Funding..." : "Get 100 test credits (dev)"}
+                  onClick={() => void handleDevTopUp()}
+                  disabled={isFunding}
+                />
+              ) : null}
               <div className="relative">
                 <button
                   type="button"

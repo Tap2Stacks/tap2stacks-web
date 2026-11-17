@@ -16,6 +16,7 @@ interface ActionButtonProps {
   pending?: boolean;
   pendingLabel: string;
   idleLabel: string;
+  variant?: "primary" | "secondary";
 }
 
 export function StatCard({ label, value, sub }: StatCardProps) {
@@ -30,9 +31,7 @@ export function StatCard({ label, value, sub }: StatCardProps) {
     >
       <div
         className="absolute inset-x-0 top-0 h-px"
-        style={{
-          background: THEME.highlight,
-        }}
+        style={{ background: THEME.highlight }}
       />
       <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-ink/65">
         {label}
@@ -40,7 +39,7 @@ export function StatCard({ label, value, sub }: StatCardProps) {
       <p className="mt-2 text-[1.65rem] font-bold tracking-[-0.04em] text-ink">
         {value}
       </p>
-      {sub ? <p className="mt-1.5 text-xs text-ink">{sub}</p> : null}
+      {sub ? <p className="mt-1.5 text-xs text-ink/70">{sub}</p> : null}
     </div>
   );
 }
@@ -51,15 +50,17 @@ export function ActionButton({
   pending,
   pendingLabel,
   idleLabel,
+  variant = "primary",
 }: ActionButtonProps) {
   return (
     <button
       type="button"
       onClick={onClick}
       disabled={disabled}
-      className="flex w-full items-center justify-center gap-2 rounded-xl px-5 py-3.5 text-sm font-semibold tracking-wide text-ink transition duration-200 hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-45"
+      className="flex w-full cursor-pointer items-center justify-center gap-2 rounded-xl px-5 py-3.5 text-sm font-semibold tracking-wide text-ink transition duration-200 hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-45"
       style={{
-        background: THEME.highlight,
+        background: variant === "primary" ? THEME.highlight : THEME.yellow,
+        border: `1.5px solid ${BORDER}`,
         boxShadow: `0 2px 0 ${THEME.ink}`,
       }}
     >
@@ -68,4 +69,3 @@ export function ActionButton({
     </button>
   );
 }
-

@@ -8,16 +8,16 @@ import { ProofsView } from "../ProofsView";
 
 vi.mock("wagmi", () => ({
   useAccount: () => ({ isConnected: false }),
-  useBalance: () => ({ refetch: vi.fn() }),
-  useSwitchChain: () => ({}),
-  useWaitForTransactionReceipt: () => ({}),
-  useWriteContract: () => ({ writeContract: vi.fn() }),
+  useConfig: () => ({ chains: [{ id: 84532 }] }),
+  useCapabilities: () => ({ data: undefined }),
+  useReadContracts: () => ({ data: undefined, refetch: vi.fn() }),
+  useSendCalls: () => ({ sendCallsAsync: vi.fn() }),
+  useSendTransaction: () => ({ sendTransactionAsync: vi.fn() }),
+  useSwitchChain: () => ({ switchChainAsync: vi.fn(), isPending: false }),
+  useWriteContract: () => ({ writeContractAsync: vi.fn() }),
 }));
 vi.mock("../services/queries", () => ({
   useAccountControllerGetBalance: () => ({ refetch: vi.fn() }),
-  paymentControllerDebugDeposit: vi.fn(),
-  paymentControllerDebugFinalizeWithdrawal: vi.fn(),
-  paymentControllerGetActiveWithdrawalSession: vi.fn(),
   paymentControllerRequestWithdrawal: vi.fn(),
 }));
 

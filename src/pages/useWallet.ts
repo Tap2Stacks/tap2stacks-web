@@ -1,380 +1,251 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useAccount, useBalance, useSwitchChain, useWaitForTransactionReceipt, useWriteContract } from "wagmi";
-import { type Abi, formatUnits, parseUnits } from "viem";
-import { toast } from "react-hot-toast";
+import { useCallback, useEffect, useState } from "react";
+import toast from "react-hot-toast";
+import type { Abi, Address, Hex } from "viem";
+import { useAccount, useReadContracts, useSwitchChain } from "wagmi";
 import { baseSepolia } from "../config/chains";
-import tap2StacksVaultAbi from "../contracts/abi/Tap2StacksVault.json";
-import { TOKEN_DECIMALS, TOKEN_SYMBOL, showTransactionSubmittedToast } from "../utils/chain";
+import testUsdcAbi from "../contracts/abi/TestUSDC.json";
+import type { ContractAddresses } from "../contracts/addresses";
+import { useSponsoredCalls } from "../hooks/useSponsoredCalls";
 import {
-  paymentControllerDebugDeposit, paymentControllerDebugFinalizeWithdrawal,
-  paymentControllerGetActiveWithdrawalSession, paymentControllerRequestWithdrawal,
+  buildDepositCalls,
+  buildFaucetCalls,
+  buildWithdrawCalls,
+  type WithdrawPermit,
+} from "../lib/calls";
+import { fromBaseUnits } from "../lib/units";
+import {
+  paymentControllerRequestWithdrawal,
   useAccountControllerGetBalance,
 } from "../services/queries";
-import { formatAmount, formatCompactNumber, resolveContractAddresses, safeParseUnits } from "./walletUtils";
+import { useGameStore } from "../store";
+import {
+  formatCooldown,
+  notifyWalletError,
+  parseUsdcInput,
+  resolveContractAddresses,
+  toSafeBaseUnits,
+} from "./walletUtils";
 
-const IN_APP_PER_TOKEN = 10;
-const NATIVE_SYMBOL = TOKEN_SYMBOL;
-const NATIVE_DECIMALS = TOKEN_DECIMALS;
-const VAULT_ABI = tap2StacksVaultAbi as Abi;
-type TabKey = "deposit" | "withdraw";
+export type WalletTab = "deposit" | "withdraw";
+export type PendingAction = "faucet" | "deposit" | "withdraw" | null;
+
+const TUSDC_ABI = testUsdcAbi as Abi;
+
+function useFaucetCountdown(nextClaimAtSec: number) {
+  const [nowSec, setNowSec] = useState(() => Math.floor(Date.now() / 1000));
+  const cooldownSec = Math.max(0, nextClaimAtSec - nowSec);
+
+  useEffect(() => {
+    if (nextClaimAtSec <= Math.floor(Date.now() / 1000)) return;
+    const timer = setInterval(() => {
+      setNowSec(Math.floor(Date.now() / 1000));
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [nextClaimAtSec]);
+
+  return { cooldownSec, cooldownLabel: formatCooldown(cooldownSec) };
+}
+
+function useOnChainTokenState(
+  contracts: ContractAddresses | null,
+  address: Address | undefined,
+) {
+  const { data: reads, refetch } = useReadContracts({
+    contracts:
+      contracts && address
+        ? [
+            {
+              address: contracts.tUSDC,
+              abi: TUSDC_ABI,
+              functionName: "balanceOf",
+              args: [address],
+              chainId: baseSepolia.id,
+            },
+            {
+              address: contracts.tUSDC,
+              abi: TUSDC_ABI,
+              functionName: "nextClaimAt",
+              args: [address],
+              chainId: baseSepolia.id,
+            },
+          ]
+        : [],
+    query: { enabled: Boolean(contracts && address) },
+  });
+
+  const walletBalanceBase =
+    reads?.[0]?.status === "success" ? (reads[0].result as bigint) : undefined;
+  const nextClaimAtSec =
+    reads?.[1]?.status === "success" ? Number(reads[1].result as bigint) : 0;
+  return { walletBalanceBase, nextClaimAtSec, refetchReads: refetch };
+}
+
+function parsePermitResponse(raw: unknown): WithdrawPermit {
+  const data = raw as Partial<WithdrawPermit> | null;
+  if (
+    !data ||
+    typeof data.amountBase !== "string" ||
+    typeof data.deadline !== "number" ||
+    typeof data.signature !== "string"
+  ) {
+    throw new Error("Invalid withdrawal permit response");
+  }
+  return {
+    amountBase: data.amountBase,
+    deadline: data.deadline,
+    signature: data.signature as Hex,
+  };
+}
 
 export function useWallet() {
   const contracts = resolveContractAddresses();
   const { address, isConnected, chain } = useAccount();
   const { switchChainAsync, isPending: isPendingSwitch } = useSwitchChain();
-  const [activeTab, setActiveTab] = useState<TabKey>("deposit");
-  const [depositAmountStr, setDepositAmountStr] = useState("");
-  const [withdrawInAppStr, setWithdrawInAppStr] = useState("");
-  const pendingDepositAmountRef = useRef<string | null>(null);
-  const handledDepositTxHashRef = useRef<string | null>(null);
+  const { send, sponsored } = useSponsoredCalls();
+  const [activeTab, setActiveTab] = useState<WalletTab>("deposit");
+  const [amountStr, setAmountStr] = useState("");
+  const [pendingAction, setPendingAction] = useState<PendingAction>(null);
 
-  const { data: nativeBalance, refetch: refetchNativeBalance } = useBalance({
-    address,
-    chainId: baseSepolia.id,
-    query: { enabled: !!address },
-  });
-
-  const { data: offChainBalanceData, refetch: refetchOffChainBalance } =
+  const storeBalance = useGameStore((s) => s.balance);
+  const { data: offChainData, refetch: refetchOffChain } =
     useAccountControllerGetBalance();
-  const offChainBalance = Number(
-    (offChainBalanceData as { free?: string } | undefined)?.free ?? 0,
-  );
+  const freeStr = (offChainData as { free?: string } | undefined)?.free;
+  const offChainBalance = freeStr !== undefined ? Number(freeStr) : storeBalance;
+  const offChainBase = toSafeBaseUnits(freeStr ?? String(storeBalance));
 
-  const {
-    writeContract: writeDepositTrader,
-    data: depositTxHash,
-    isPending: isDepositingOnChain,
-  } = useWriteContract();
-
-  const {
-    writeContract: writeClaimTrader,
-    data: claimTxHash,
-    isPending: isClaimingTrader,
-  } = useWriteContract();
-  const { isLoading: isWaitingClaim, isSuccess: isClaimSuccess } =
-    useWaitForTransactionReceipt({ hash: claimTxHash });
-
-  const [isSubmittingApi, setIsSubmittingApi] = useState(false);
-
-  const depositTokenAmountRaw = safeParseUnits(
-    depositAmountStr,
-    NATIVE_DECIMALS,
-  );
-  const rawDepositAmount = depositAmountStr
-    ? Number.parseFloat(depositAmountStr)
-    : 0;
-  const isValidDepositAmount =
-    Number.isFinite(rawDepositAmount) &&
-    rawDepositAmount > 0 &&
-    depositTokenAmountRaw > 0n;
-
-  const depositInAppEquivalent = depositAmountStr
-    ? formatCompactNumber(rawDepositAmount * IN_APP_PER_TOKEN, 0)
-    : "0";
-
-  const rawWithdrawInApp = withdrawInAppStr
-    ? Number.parseFloat(withdrawInAppStr)
-    : 0;
-  const isValidWithdrawAmount =
-    Number.isFinite(rawWithdrawInApp) && rawWithdrawInApp > 0;
-  const withdrawTokenFloat = rawWithdrawInApp / IN_APP_PER_TOKEN;
-  const withdrawTokenStr = withdrawTokenFloat.toFixed(18);
-  const withdrawTokenAmountRaw = isValidWithdrawAmount
-    ? parseUnits(withdrawTokenStr, NATIVE_DECIMALS)
-    : 0n;
-  const withdrawTokenEquivalent = isValidWithdrawAmount
-    ? withdrawTokenFloat.toFixed(6)
-    : "0";
+  const { walletBalanceBase, nextClaimAtSec, refetchReads } =
+    useOnChainTokenState(contracts, address);
+  const { cooldownSec, cooldownLabel } = useFaucetCountdown(nextClaimAtSec);
 
   const refreshAll = useCallback(() => {
-    refetchNativeBalance();
-    refetchOffChainBalance();
-  }, [refetchNativeBalance, refetchOffChainBalance]);
+    void refetchReads();
+    void refetchOffChain();
+  }, [refetchReads, refetchOffChain]);
 
-  const ensureBaseSepolia = useCallback(async () => {
-    if (!isConnected) {
-      toast.error("Connect wallet to continue.");
-      return false;
-    }
+  const chainMismatch = Boolean(isConnected && chain?.id !== baseSepolia.id);
+  const isDepositFlow = activeTab === "deposit";
+  const maxBase = isDepositFlow ? (walletBalanceBase ?? 0n) : offChainBase;
+  const parsed = parseUsdcInput(amountStr, isConnected ? maxBase : null);
 
-    if (chain?.id === baseSepolia.id) {
-      return true;
-    }
-
-    if (!switchChainAsync) {
-      toast.error(`Switch to ${baseSepolia.name} to continue.`);
-      return false;
-    }
-
+  const handleSwitchChain = useCallback(async () => {
+    if (!switchChainAsync) return;
     try {
       await switchChainAsync({ chainId: baseSepolia.id });
-      return true;
     } catch (error) {
-      console.error("Network switch failed", error);
-      toast.error(`Please switch to ${baseSepolia.name} before continuing.`);
-      return false;
+      notifyWalletError(error, `Switch to ${baseSepolia.name} failed`);
     }
-  }, [chain?.id, isConnected, switchChainAsync]);
+  }, [switchChainAsync]);
 
-  useEffect(() => {
-    if (!depositTxHash) return;
-
-    showTransactionSubmittedToast({
-      hash: depositTxHash,
-      title: "Deposit transaction submitted",
-      description: "Your wallet has broadcast the deposit transaction.",
-    });
-  }, [depositTxHash]);
-
-  useEffect(() => {
-    if (!claimTxHash) return;
-
-    showTransactionSubmittedToast({
-      hash: claimTxHash,
-      title: "Withdrawal claim transaction submitted",
-      description:
-        "Your wallet has broadcast the withdrawal claim transaction.",
-    });
-  }, [claimTxHash]);
-
-  useEffect(() => {
-    const handleDepositApi = async () => {
-      if (!depositTxHash || handledDepositTxHashRef.current === depositTxHash) {
+  const runAction = useCallback(
+    async (
+      action: Exclude<PendingAction, null>,
+      fn: () => Promise<void>,
+      fallback: string,
+    ) => {
+      if (chainMismatch) {
+        await handleSwitchChain();
         return;
       }
-
-      const submittedAmountStr = pendingDepositAmountRef.current;
-      const tokenAmountFloat = submittedAmountStr
-        ? Number.parseFloat(submittedAmountStr)
-        : NaN;
-
-      if (!Number.isFinite(tokenAmountFloat) || tokenAmountFloat <= 0) {
-        pendingDepositAmountRef.current = null;
-        handledDepositTxHashRef.current = depositTxHash;
-        return;
-      }
-
-      handledDepositTxHashRef.current = depositTxHash;
-
+      if (!contracts || !isConnected || pendingAction) return;
+      setPendingAction(action);
       try {
-        setIsSubmittingApi(true);
-
-        const apiAmount = Math.floor(
-          tokenAmountFloat * IN_APP_PER_TOKEN,
-        ).toString();
-
-        const token = localStorage.getItem("token");
-
-        await paymentControllerDebugDeposit(
-          {
-            amount: apiAmount,
-            txHash: depositTxHash,
-            logIndex: 0,
-          },
-          {
-            headers: {
-              Authorization: `Bearer ${token}`,
-            },
-          },
-        );
-
-        refreshAll();
-        setDepositAmountStr("");
-        pendingDepositAmountRef.current = null;
+        await fn();
       } catch (error) {
-        console.error("API error", error);
-        toast.error("Transaction sent but API call failed.");
+        notifyWalletError(error, fallback);
       } finally {
-        setIsSubmittingApi(false);
+        setPendingAction(null);
       }
-    };
-
-    handleDepositApi();
-  }, [depositTxHash, refreshAll]);
-
-  useEffect(() => {
-    if (!isClaimSuccess || !claimTxHash) return;
-
-    const handleFinalizeWithdrawal = async () => {
-      try {
-        setIsSubmittingApi(true);
-
-        const token = localStorage.getItem("token");
-        const authHeader = { Authorization: `Bearer ${token}` };
-
-        const sessionResponse =
-          await paymentControllerGetActiveWithdrawalSession({
-            headers: authHeader,
-          });
-
-        const sessionData = sessionResponse as unknown as
-          | { sessionId: string }
-          | null
-          | undefined;
-
-        if (!sessionData?.sessionId) {
-          toast.error("Could not retrieve withdrawal session ID.");
-          return;
-        }
-
-        await paymentControllerDebugFinalizeWithdrawal(
-          {
-            sessionId: sessionData.sessionId,
-            txHash: claimTxHash,
-            logIndex: 0,
-          },
-          {
-            headers: {
-              ...authHeader,
-              "Content-Type": "application/json",
-            },
-          },
-        );
-
-        toast.success("Withdrawal finalized successfully!");
-        refreshAll();
-        setWithdrawInAppStr("");
-      } catch (error) {
-        console.error("Finalize withdrawal error", error);
-        toast.error("On-chain claim sent but finalization failed.");
-      } finally {
-        setIsSubmittingApi(false);
-      }
-    };
-
-    handleFinalizeWithdrawal();
-  }, [claimTxHash, isClaimSuccess, refreshAll]);
-
-  const handleDeposit = async () => {
-    if (!contracts) {
-      toast.error("Contracts not deployed yet");
-      return;
-    }
-
-    const onBaseSepolia = await ensureBaseSepolia();
-    if (!onBaseSepolia) return;
-
-    if (!depositAmountStr || !isValidDepositAmount) {
-      toast.error("Enter a valid amount");
-      return;
-    }
-
-    if ((nativeBalance?.value ?? 0n) < depositTokenAmountRaw) {
-      toast.error("Insufficient balance");
-      return;
-    }
-
-    pendingDepositAmountRef.current = depositAmountStr;
-
-    writeDepositTrader({
-      address: contracts.vault,
-      abi: VAULT_ABI,
-      functionName: "depositTrader",
-      value: depositTokenAmountRaw,
-    });
-  };
-
-  const handleWithdraw = async () => {
-    if (!contracts) {
-      toast.error("Contracts not deployed yet");
-      return;
-    }
-
-    const onBaseSepolia = await ensureBaseSepolia();
-    if (!onBaseSepolia) return;
-
-    if (!withdrawInAppStr || !isValidWithdrawAmount) {
-      toast.error("Enter a valid in-app balance amount");
-      return;
-    }
-
-    const token = localStorage.getItem("token");
-    const authHeader = { Authorization: `Bearer ${token}` };
-
-    try {
-      setIsSubmittingApi(true);
-
-      await paymentControllerRequestWithdrawal(
-        { amount: withdrawInAppStr },
-        { headers: { ...authHeader, "Content-Type": "application/json" } },
-      );
-
-      toast.success("Withdrawal request submitted. Processing on-chain...");
-    } catch (error) {
-      console.error("Request withdrawal error", error);
-      toast.error("Failed to initiate withdrawal request.");
-      setIsSubmittingApi(false);
-      return;
-    } finally {
-      setIsSubmittingApi(false);
-    }
-
-    writeClaimTrader({
-      address: contracts.vault,
-      abi: VAULT_ABI,
-      functionName: "claimTrader",
-      args: [withdrawTokenAmountRaw],
-    });
-  };
-
-  const handleMaxDeposit = () => {
-    if (!nativeBalance?.value) return;
-
-    setDepositAmountStr(formatUnits(nativeBalance.value, NATIVE_DECIMALS));
-  };
-
-  const handleMaxWithdraw = () => {
-    if (offChainBalance <= 0) return;
-
-    setWithdrawInAppStr(offChainBalance.toString());
-  };
-
-  const chainMismatch = isConnected && chain?.id !== baseSepolia.id;
-  const isInsufficientDeposit =
-    depositTokenAmountRaw > (nativeBalance?.value ?? 0n);
-  const isInsufficientWithdraw = rawWithdrawInApp > offChainBalance;
-
-  const depositPending = isDepositingOnChain || isSubmittingApi;
-  const withdrawPending = isSubmittingApi || isClaimingTrader || isWaitingClaim;
-  const isDepositFlow = activeTab === "deposit";
-  const fromAmount = isDepositFlow ? depositAmountStr : withdrawInAppStr;
-  const toAmount = isDepositFlow
-    ? depositInAppEquivalent
-    : withdrawTokenEquivalent;
-  const fromAsset = isDepositFlow ? NATIVE_SYMBOL : "APP";
-  const toAsset = isDepositFlow ? "APP" : NATIVE_SYMBOL;
-  const fromAssetBalance = isDepositFlow
-    ? `${formatAmount(nativeBalance?.value, NATIVE_DECIMALS)} ${NATIVE_SYMBOL}`
-    : `${formatCompactNumber(offChainBalance, 0)} APP`;
-  const toAssetBalance = isDepositFlow
-    ? `${formatCompactNumber(offChainBalance, 0)} APP`
-    : `${formatAmount(nativeBalance?.value, NATIVE_DECIMALS)} ${NATIVE_SYMBOL}`;
-
-  const activeRailLabel = useMemo(
-    () =>
-      activeTab === "deposit" ? "Chain → App balance" : "App balance → Chain",
-    [activeTab],
+    },
+    [chainMismatch, contracts, handleSwitchChain, isConnected, pendingAction],
   );
 
-  const handleToggleDirection = () => {
-    setActiveTab((current) => (current === "deposit" ? "withdraw" : "deposit"));
-    setDepositAmountStr("");
-    setWithdrawInAppStr("");
-  };
+  const handleFaucet = useCallback(
+    () =>
+      runAction(
+        "faucet",
+        async () => {
+          if (cooldownSec > 0) return;
+          await send(buildFaucetCalls());
+          toast.success("Claimed 100 tUSDC");
+          refreshAll();
+        },
+        "Faucet claim failed",
+      ),
+    [cooldownSec, refreshAll, runAction, send],
+  );
 
-  const shortAddress = address
-    ? `${address.slice(0, 6)}...${address.slice(-4)}`
-    : "Not connected";
+  const handleDeposit = useCallback(
+    () =>
+      runAction(
+        "deposit",
+        async () => {
+          if (!parsed.valid) return;
+          await send(buildDepositCalls(parsed.base));
+          toast.success("Deposit confirmed");
+          setAmountStr("");
+          refreshAll();
+        },
+        "Deposit failed",
+      ),
+    [parsed.base, parsed.valid, refreshAll, runAction, send],
+  );
+
+  const handleWithdraw = useCallback(
+    () =>
+      runAction(
+        "withdraw",
+        async () => {
+          if (!parsed.valid) return;
+          if (!localStorage.getItem("token")) {
+            toast.error("Sign in with your wallet to withdraw");
+            return;
+          }
+          const permitRaw = await paymentControllerRequestWithdrawal({
+            amount: parsed.normalized,
+          });
+          await send(buildWithdrawCalls(parsePermitResponse(permitRaw)));
+          toast.success("Withdrawal confirmed");
+          setAmountStr("");
+          refreshAll();
+        },
+        "Withdrawal failed",
+      ),
+    [parsed.normalized, parsed.valid, refreshAll, runAction, send],
+  );
+
+  const handleMax = useCallback(() => {
+    if (maxBase > 0n) setAmountStr(fromBaseUnits(maxBase));
+  }, [maxBase]);
+
+  const handleToggleDirection = useCallback(() => {
+    setActiveTab((cur) => (cur === "deposit" ? "withdraw" : "deposit"));
+    setAmountStr("");
+  }, []);
 
   return {
-    contracts, address, isConnected, chain,
-    switchChainAsync, isPendingSwitch, activeTab, setDepositAmountStr,
-    setWithdrawInAppStr, nativeBalance, offChainBalance, isValidDepositAmount,
-    isValidWithdrawAmount, refreshAll, handleDeposit, handleWithdraw,
-    handleMaxDeposit, handleMaxWithdraw, chainMismatch, isInsufficientDeposit,
-    isInsufficientWithdraw, depositPending, withdrawPending, isDepositFlow,
-    fromAmount, toAmount, fromAsset, toAsset,
-    fromAssetBalance, toAssetBalance, activeRailLabel, handleToggleDirection,
-    shortAddress,
+    contracts,
+    isConnected,
+    chain,
+    shortAddress: address ? `${address.slice(0, 6)}...${address.slice(-4)}` : "Not connected",
+    chainMismatch,
+    isPendingSwitch,
+    sponsored,
+    activeTab,
+    isDepositFlow,
+    amountStr,
+    setAmountStr,
+    parsed,
+    walletBalanceBase,
+    offChainBalance,
+    cooldownSec,
+    cooldownLabel,
+    pendingAction,
+    refreshAll,
+    handleSwitchChain,
+    handleFaucet,
+    handleDeposit,
+    handleWithdraw,
+    handleMax,
+    handleToggleDirection,
   };
 }

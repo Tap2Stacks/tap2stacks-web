@@ -1,68 +1,250 @@
 import React from "react";
 import { ArrowDownUp, CircleDollarSign, Coins, Droplets, RefreshCw, ShieldCheck, Wallet } from "lucide-react";
 import { baseSepolia } from "./config/chains";
-import { TOKEN_DECIMALS, TOKEN_SYMBOL } from "./utils/chain";
-import { THEME } from "./ui/theme";
 import { ActionButton, StatCard } from "./pages/WalletCards";
 import { useWallet } from "./pages/useWallet";
 import { formatAmount, formatCompactNumber } from "./pages/walletUtils";
+import { THEME } from "./ui/theme";
+import { TOKEN_DECIMALS, TOKEN_SYMBOL } from "./utils/chain";
 
-const IN_APP_PER_TOKEN = 10;
-const NATIVE_SYMBOL = TOKEN_SYMBOL;
-const NATIVE_DECIMALS = TOKEN_DECIMALS;
-const ACCENT = THEME.ink;
-const ACCENT_SOFT = THEME.yellow;
-const BORDER = THEME.ink;
-const PANEL_BG = THEME.paper;
-const SUBTLE_BG = THEME.yellow;
+function WalletOverview({
+  shortAddress,
+  chainName,
+  vaultAddress,
+  sponsored,
+  isConnected,
+  chainMismatch,
+}: {
+  shortAddress: string;
+  chainName?: string;
+  vaultAddress?: string;
+  sponsored: boolean;
+  isConnected: boolean;
+  chainMismatch: boolean;
+}) {
+  const rows = [
+    { label: "Wallet", value: shortAddress, icon: Wallet },
+    { label: "Network", value: chainName ?? "Not connected", icon: CircleDollarSign },
+    {
+      label: "Vault",
+      value: vaultAddress ? `${vaultAddress.slice(0, 8)}...${vaultAddress.slice(-6)}` : "Not set up",
+      icon: ShieldCheck,
+    },
+    {
+      label: "Gas",
+      value: isConnected ? (sponsored ? "Sponsored" : "You pay gas") : "—",
+      icon: Coins,
+    },
+  ];
+  return (
+    <div
+      className="rounded-xl p-5"
+      style={{ background: THEME.paper, border: `1.5px solid ${THEME.ink}`, boxShadow: `0 2px 0 ${THEME.ink}` }}
+    >
+      <h3 className="text-lg font-semibold text-ink">Wallet Overview</h3>
+      <div className="mt-4 space-y-2">
+        {rows.map(({ label, value, icon: Icon }) => (
+          <div
+            key={label}
+            className="flex items-center justify-between gap-3 rounded-lg border px-3 py-2"
+            style={{ borderColor: THEME.ink, background: THEME.yellow }}
+          >
+            <span className="inline-flex items-center gap-2 text-xs text-ink/70">
+              <Icon size={14} className="text-ink" />
+              {label}
+            </span>
+            <span className="text-xs font-semibold text-ink">{value}</span>
+          </div>
+        ))}
+      </div>
+      {chainMismatch ? (
+        <p className="mt-3 text-xs text-loss">Wrong network. Switch to {baseSepolia.name}.</p>
+      ) : null}
+    </div>
+  );
+}
+
+function FaucetCard({
+  contractsReady,
+  isConnected,
+  chainMismatch,
+  isPendingSwitch,
+  cooldownSec,
+  cooldownLabel,
+  pending,
+  onClaim,
+}: {
+  contractsReady: boolean;
+  isConnected: boolean;
+  chainMismatch: boolean;
+  isPendingSwitch: boolean;
+  cooldownSec: number;
+  cooldownLabel: string;
+  pending: boolean;
+  onClaim: () => void;
+}) {
+  const idleLabel = chainMismatch
+    ? "Switch to Base Sepolia"
+    : !isConnected
+      ? "Connect wallet to claim"
+      : cooldownSec > 0
+        ? `Cooldown ${cooldownLabel}`
+        : `Claim 100 ${TOKEN_SYMBOL}`;
+  return (
+    <div
+      className="rounded-xl p-5"
+      style={{ background: THEME.paper, border: `1.5px solid ${THEME.ink}`, boxShadow: `0 2px 0 ${THEME.ink}` }}
+    >
+      <div className="flex items-center justify-between gap-2">
+        <div>
+          <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-ink/65">Testnet Faucet</p>
+          <h3 className="mt-1 text-base font-semibold text-ink">100 {TOKEN_SYMBOL} / 24h</h3>
+        </div>
+        <Droplets size={18} className="text-ink" />
+      </div>
+      <div className="mt-4">
+        <ActionButton
+          variant="secondary"
+          onClick={onClaim}
+          disabled={!contractsReady || (!chainMismatch && (!isConnected || cooldownSec > 0)) || pending || isPendingSwitch}
+          pending={pending || (chainMismatch && isPendingSwitch)}
+          pendingLabel={chainMismatch ? "Switching..." : "Claiming..."}
+          idleLabel={idleLabel}
+        />
+      </div>
+    </div>
+  );
+}
+
+function TransferAmountBox(w: ReturnType<typeof useWallet>) {
+  const balanceText = w.isDepositFlow
+    ? `${formatAmount(w.walletBalanceBase, TOKEN_DECIMALS)} ${TOKEN_SYMBOL}`
+    : `${formatCompactNumber(w.offChainBalance)} ${TOKEN_SYMBOL}`;
+  return (
+    <div className="rounded-xl border p-3" style={{ borderColor: THEME.ink, background: THEME.paper }}>
+      <div className="flex items-center justify-between text-xs text-ink/70">
+        <span>{w.isDepositFlow ? "From Wallet" : "From App Balance"}</span>
+        <button
+          type="button"
+          onClick={w.handleMax}
+          className="cursor-pointer rounded-md border px-2 py-1 text-[11px] font-medium text-ink"
+          style={{ borderColor: THEME.ink, background: THEME.yellow }}
+        >
+          Max
+        </button>
+      </div>
+      <div className="mt-3 flex items-center gap-2">
+        <input
+          type="text"
+          inputMode="decimal"
+          value={w.amountStr}
+          onChange={(e) => w.setAmountStr(e.target.value)}
+          placeholder="0"
+          className="min-w-0 flex-1 bg-transparent text-left text-3xl font-semibold tracking-tight text-ink outline-none placeholder:text-ink/40"
+        />
+        <span className="inline-flex items-center gap-1 rounded-md border px-2 py-1 text-xs font-semibold" style={{ borderColor: THEME.ink, background: THEME.yellow }}>
+          <Coins size={13} className="text-ink" />
+          {TOKEN_SYMBOL}
+        </span>
+      </div>
+      <p className="mt-2 text-xs text-ink/70">Available: {balanceText}</p>
+    </div>
+  );
+}
+
+function TransferForm(w: ReturnType<typeof useWallet>) {
+  const actionLabel = w.chainMismatch
+    ? "Switch to Base Sepolia"
+    : !w.isConnected
+      ? "Connect wallet"
+      : w.isDepositFlow
+        ? `Deposit ${TOKEN_SYMBOL}`
+        : `Withdraw ${TOKEN_SYMBOL}`;
+  const isBusy = w.pendingAction === "deposit" || w.pendingAction === "withdraw" || (w.chainMismatch && w.isPendingSwitch);
+  const disabled = !w.chainMismatch && (!w.isConnected || !w.parsed.valid || w.pendingAction !== null);
+  return (
+    <div className="mt-4 space-y-3">
+      <TransferAmountBox {...w} />
+      <div className="flex justify-center">
+        <button
+          type="button"
+          onClick={w.handleToggleDirection}
+          className="inline-flex h-10 w-10 cursor-pointer items-center justify-center rounded-xl border text-ink"
+          style={{ borderColor: THEME.ink, background: THEME.yellow }}
+          aria-label="Switch swap direction"
+        >
+          <ArrowDownUp size={16} />
+        </button>
+      </div>
+      {w.parsed.error ? <p className="text-xs text-loss">{w.parsed.error}</p> : null}
+      {!w.sponsored ? <p className="text-xs text-ink/70">You pay gas on this wallet.</p> : null}
+      <ActionButton
+        onClick={() => void (w.isDepositFlow ? w.handleDeposit() : w.handleWithdraw())}
+        disabled={disabled || isBusy}
+        pending={isBusy}
+        pendingLabel={w.chainMismatch ? "Switching network..." : w.isDepositFlow ? "Depositing..." : "Withdrawing..."}
+        idleLabel={actionLabel}
+      />
+    </div>
+  );
+}
+
+function TransferCard(w: ReturnType<typeof useWallet>) {
+  return (
+    <div
+      className="h-fit rounded-xl p-5 lg:sticky lg:top-5"
+      style={{ background: THEME.paper, border: `1.5px solid ${THEME.ink}`, boxShadow: `0 2px 0 ${THEME.ink}` }}
+    >
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <p className="text-xs uppercase tracking-[0.2em] text-ink/70">Transfer (1:1)</p>
+          <h2 className="mt-1 text-lg font-semibold text-ink">
+            {w.isDepositFlow ? "Wallet → App balance" : "App balance → Wallet"}
+          </h2>
+        </div>
+        <span className="rounded-md border px-2 py-1 text-xs text-ink" style={{ borderColor: THEME.ink, background: THEME.yellow }}>
+          {w.isConnected ? "Connected" : "Offline"}
+        </span>
+      </div>
+
+      {!w.contracts ? (
+        <div className="mt-4 rounded-xl border p-6 text-center" style={{ borderColor: THEME.ink, background: THEME.paper }}>
+          <p className="text-sm font-semibold text-ink">On-chain wallet not set up yet</p>
+          <p className="mt-1.5 text-xs text-ink/70">
+            Contract addresses are not configured.
+            {import.meta.env.DEV ? " Use the dev top-up button in the header for local testing." : ""}
+          </p>
+        </div>
+      ) : (
+        <TransferForm {...w} />
+      )}
+    </div>
+  );
+}
 
 export const WalletView: React.FC = () => {
-  const {
-    contracts, isConnected, chain, switchChainAsync,
-    isPendingSwitch, activeTab, setDepositAmountStr, setWithdrawInAppStr,
-    nativeBalance, offChainBalance, isValidDepositAmount, isValidWithdrawAmount,
-    refreshAll, handleDeposit, handleWithdraw, handleMaxDeposit,
-    handleMaxWithdraw, chainMismatch, isInsufficientDeposit, isInsufficientWithdraw,
-    depositPending, withdrawPending, isDepositFlow, fromAmount,
-    toAmount, fromAsset, toAsset, fromAssetBalance,
-    toAssetBalance, activeRailLabel, handleToggleDirection, shortAddress,
-  } = useWallet();
+  const w = useWallet();
   return (
     <div className="relative mx-auto flex w-full max-w-7xl flex-1 flex-col gap-4 px-4 py-5 sm:px-6 lg:px-10 lg:py-7">
-
       <section className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
-          <div
-            className="flex h-10 w-10 items-center justify-center rounded-full border"
-            style={{
-              borderColor: THEME.ink,
-              background: ACCENT_SOFT,
-            }}
-          >
-            <Droplets size={18} style={{ color: ACCENT }} />
+          <div className="flex h-10 w-10 items-center justify-center rounded-full border" style={{ borderColor: THEME.ink, background: THEME.yellow }}>
+            <Wallet size={18} className="text-ink" />
           </div>
           <div>
-            <h1 className="text-[1.72rem] font-bold tracking-[-0.03em] text-ink">
-              Wallet Liquidity
-            </h1>
-            <p className="text-xs text-ink/70">
-              Deposit and withdraw between wallet and in-app balance
-            </p>
+            <h1 className="text-[1.72rem] font-bold tracking-[-0.03em] text-ink">Wallet</h1>
+            <p className="text-xs text-ink/70">Claim test USDC, deposit to vault, or withdraw with permit</p>
           </div>
         </div>
-
         <div className="flex items-center gap-2 text-xs text-ink/70">
-          <span
-            className="rounded-md border px-2.5 py-1.5"
-            style={{ borderColor: BORDER, background: SUBTLE_BG }}
-          >
+          <span className="rounded-md border px-2.5 py-1.5" style={{ borderColor: THEME.ink, background: THEME.yellow }}>
             {baseSepolia.name}
           </span>
           <button
             type="button"
-            onClick={refreshAll}
-            className="inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-ink transition hover:text-ink"
-            style={{ borderColor: BORDER, background: SUBTLE_BG }}
+            onClick={w.refreshAll}
+            className="inline-flex cursor-pointer items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-ink"
+            style={{ borderColor: THEME.ink, background: THEME.yellow }}
           >
             <RefreshCw size={12} />
             Refresh
@@ -70,276 +252,43 @@ export const WalletView: React.FC = () => {
         </div>
       </section>
 
-      <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+      <section className="grid gap-3 sm:grid-cols-2">
         <StatCard
-          label="On-Chain Balance"
-          value={`${formatAmount(nativeBalance?.value, NATIVE_DECIMALS)} ${NATIVE_SYMBOL}`}
-          sub="Native wallet balance"
+          label={`Wallet ${TOKEN_SYMBOL}`}
+          value={`${formatAmount(w.walletBalanceBase, TOKEN_DECIMALS)} ${TOKEN_SYMBOL}`}
+          sub="On-chain Base Sepolia"
         />
         <StatCard
           label="App Balance"
-          value={formatCompactNumber(offChainBalance, 0)}
-          sub="Available in app"
-        />
-        <StatCard
-          label="Conversion"
-          value={`1 ${NATIVE_SYMBOL} = ${IN_APP_PER_TOKEN.toLocaleString()} APP`}
-          sub={activeRailLabel}
+          value={`${formatCompactNumber(w.offChainBalance)} ${TOKEN_SYMBOL}`}
+          sub="Available to trade or withdraw"
         />
       </section>
 
       <section className="grid gap-4 lg:grid-cols-[1fr_1fr]">
         <div className="space-y-4">
-          <div
-            className="rounded-xl p-5"
-            style={{
-              background: PANEL_BG,
-              border: `1.5px solid ${BORDER}`,
-              boxShadow: `0 2px 0 ${THEME.ink}`,
-            }}
-          >
-            <h3 className="text-lg font-semibold text-ink">
-              Wallet Overview
-            </h3>
-            <div className="mt-4 space-y-2">
-              {[
-                { label: "Wallet", value: shortAddress, icon: Wallet },
-                {
-                  label: "Current Network",
-                  value: chain?.name ?? "Unknown",
-                  icon: CircleDollarSign,
-                },
-                {
-                  label: "Reserve Contract",
-                  value: contracts
-                    ? `${contracts.vault.slice(0, 8)}...${contracts.vault.slice(-6)}`
-                    : "Not deployed",
-                  icon: ShieldCheck,
-                },
-                { label: "Current Rail", value: activeRailLabel, icon: Coins },
-              ].map(({ label, value, icon: Icon }) => (
-                <div
-                  key={label}
-                  className="flex items-center justify-between gap-3 rounded-lg border px-3 py-2"
-                  style={{ borderColor: BORDER, background: SUBTLE_BG }}
-                >
-                  <span className="inline-flex items-center gap-2 text-xs text-ink/70">
-                    <Icon size={14} style={{ color: ACCENT }} />
-                    {label}
-                  </span>
-                  <span className="text-xs text-ink">{value}</span>
-                </div>
-              ))}
-            </div>
-            {chainMismatch ? (
-              <p className="mt-3 text-xs text-loss">
-                Wrong network. Please switch to {baseSepolia.name}.
-              </p>
-            ) : null}
-          </div>
+          <WalletOverview
+            shortAddress={w.shortAddress}
+            chainName={w.chain?.name}
+            vaultAddress={w.contracts?.vault}
+            sponsored={w.sponsored}
+            isConnected={w.isConnected}
+            chainMismatch={w.chainMismatch}
+          />
+          {w.contracts ? (
+            <FaucetCard
+              contractsReady={Boolean(w.contracts)}
+              isConnected={w.isConnected}
+              chainMismatch={w.chainMismatch}
+              isPendingSwitch={w.isPendingSwitch}
+              cooldownSec={w.cooldownSec}
+              cooldownLabel={w.cooldownLabel}
+              pending={w.pendingAction === "faucet"}
+              onClaim={() => void w.handleFaucet()}
+            />
+          ) : null}
         </div>
-
-        <div
-          className="h-fit rounded-xl p-5 lg:sticky lg:top-5"
-          style={{
-            background: PANEL_BG,
-            border: `1.5px solid ${BORDER}`,
-            boxShadow: `0 2px 0 ${THEME.ink}`,
-          }}
-        >
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <p className="text-xs uppercase tracking-[0.2em] text-ink">
-                Swap
-              </p>
-              <h2 className="mt-1 text-lg font-semibold text-ink">
-                {activeRailLabel}
-              </h2>
-            </div>
-            <div
-              className="rounded-md border px-2 py-1 text-xs text-ink"
-              style={{ borderColor: BORDER, background: SUBTLE_BG }}
-            >
-              {isConnected ? "Connected" : "Offline"}
-            </div>
-          </div>
-
-          {!contracts ? (
-            <div
-              className="mt-4 rounded-xl border p-6 text-center"
-              style={{
-                borderColor: BORDER,
-                background: THEME.paper,
-              }}
-            >
-              <p className="text-sm font-semibold text-ink">
-                Contracts not deployed yet
-              </p>
-              <p className="mt-1.5 text-xs text-ink/70">
-                On-chain deposit and withdrawal forms will appear once contract
-                addresses are configured. Use the dev top-up button in the
-                header for local testing.
-              </p>
-            </div>
-          ) : (
-            <>
-              <div className="mt-4 space-y-2">
-                <div
-                  className="rounded-xl border p-3"
-                  style={{
-                    borderColor: BORDER,
-                    background: THEME.paper,
-                  }}
-                >
-                  <div className="flex items-center justify-between text-xs text-ink/70">
-                    <span>From</span>
-                    <button
-                      type="button"
-                      onClick={
-                        isDepositFlow ? handleMaxDeposit : handleMaxWithdraw
-                      }
-                      className="rounded-md border px-2 py-1 text-[11px] font-medium text-ink transition hover:text-ink"
-                      style={{ borderColor: BORDER, background: SUBTLE_BG }}
-                    >
-                      Max
-                    </button>
-                  </div>
-                  <div className="mt-3 flex items-center gap-2">
-                    <input
-                      type="number"
-                      min="0"
-                      step={isDepositFlow ? "0.001" : "1"}
-                      value={fromAmount}
-                      onChange={(event) =>
-                        isDepositFlow
-                          ? setDepositAmountStr(event.target.value)
-                          : setWithdrawInAppStr(event.target.value)
-                      }
-                      placeholder="0"
-                      className="min-w-0 flex-1 bg-transparent text-left text-3xl font-semibold tracking-tight text-ink outline-none placeholder:text-ink"
-                    />
-                    <span
-                      className="inline-flex items-center gap-1 rounded-md border px-2 py-1 text-xs font-semibold"
-                      style={{ borderColor: BORDER, background: SUBTLE_BG }}
-                    >
-                      {isDepositFlow ? (
-                        <Wallet size={13} style={{ color: ACCENT }} />
-                      ) : (
-                        <Coins size={13} style={{ color: ACCENT }} />
-                      )}
-                      {fromAsset}
-                    </span>
-                  </div>
-                  <p className="mt-2 text-xs text-ink/70">
-                    Balance: {fromAssetBalance}
-                  </p>
-                </div>
-
-                <div className="flex justify-center">
-                  <button
-                    type="button"
-                    onClick={handleToggleDirection}
-                    className="inline-flex h-10 w-10 items-center justify-center rounded-xl border text-ink transition hover:text-ink"
-                    style={{ borderColor: BORDER, background: SUBTLE_BG }}
-                    aria-label="Switch swap direction"
-                  >
-                    <ArrowDownUp size={16} />
-                  </button>
-                </div>
-
-                <div
-                  className="rounded-xl border p-3"
-                  style={{
-                    borderColor: BORDER,
-                    background: THEME.paper,
-                  }}
-                >
-                  <div className="flex items-center justify-between text-xs text-ink/70">
-                    <span>To (Estimated)</span>
-                  </div>
-                  <div className="mt-3 flex items-center justify-between gap-2">
-                    <p className="text-3xl font-semibold tracking-tight text-ink">
-                      {toAmount}
-                    </p>
-                    <span
-                      className="inline-flex items-center gap-1 rounded-md border px-2 py-1 text-xs font-semibold"
-                      style={{ borderColor: BORDER, background: SUBTLE_BG }}
-                    >
-                      {isDepositFlow ? (
-                        <Coins size={13} style={{ color: ACCENT }} />
-                      ) : (
-                        <Wallet size={13} style={{ color: ACCENT }} />
-                      )}
-                      {toAsset}
-                    </span>
-                  </div>
-                  <p className="mt-2 text-xs text-ink/70">
-                    Balance: {toAssetBalance}
-                  </p>
-                </div>
-              </div>
-
-              {activeTab === "deposit" && isInsufficientDeposit ? (
-                <p className="mt-3 text-right text-xs text-loss">
-                  Deposit amount exceeds connected wallet balance.
-                </p>
-              ) : null}
-              {activeTab === "withdraw" && isInsufficientWithdraw ? (
-                <p className="mt-3 text-right text-xs text-loss">
-                  Requested amount exceeds your in-app balance.
-                </p>
-              ) : null}
-
-              <div className="mt-4">
-                {chainMismatch ? (
-                  <ActionButton
-                    onClick={() =>
-                      void switchChainAsync?.({ chainId: baseSepolia.id })
-                    }
-                    disabled={isPendingSwitch}
-                    pending={isPendingSwitch}
-                    pendingLabel="SWITCHING NETWORK"
-                    idleLabel={`SWITCH TO ${baseSepolia.name.toUpperCase()}`}
-                  />
-                ) : activeTab === "deposit" ? (
-                  <ActionButton
-                    onClick={handleDeposit}
-                    disabled={
-                      !isConnected ||
-                      depositPending ||
-                      !isValidDepositAmount ||
-                      isInsufficientDeposit
-                    }
-                    pending={depositPending}
-                    pendingLabel="PROCESSING DEPOSIT"
-                    idleLabel={
-                      isConnected
-                        ? `DEPOSIT ${NATIVE_SYMBOL}`
-                        : "CONNECT WALLET TO DEPOSIT"
-                    }
-                  />
-                ) : (
-                  <ActionButton
-                    onClick={handleWithdraw}
-                    disabled={
-                      !isConnected ||
-                      withdrawPending ||
-                      !isValidWithdrawAmount ||
-                      isInsufficientWithdraw
-                    }
-                    pending={withdrawPending}
-                    pendingLabel="PROCESSING WITHDRAWAL"
-                    idleLabel={
-                      isConnected
-                        ? `WITHDRAW ${NATIVE_SYMBOL}`
-                        : "CONNECT WALLET TO WITHDRAW"
-                    }
-                  />
-                )}
-              </div>
-            </>
-          )}
-        </div>
+        <TransferCard {...w} />
       </section>
     </div>
   );

@@ -140,3 +140,11 @@
     appearance: textfield;
   }
 }
+
+@keyframes fx-shake { 0%, 100% { transform: translateX(0); } 20%, 60% { transform: translateX(-4px); } 40%, 80% { transform: translateX(4px); } }
+.fx-shake { animation: fx-shake 350ms ease-out; }
+@media (prefers-reduced-motion: reduce) { .fx-shake { animation: none; } }
+
+@keyframes running-bar-scroll { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+.running-bar-track { animation: running-bar-scroll linear infinite; }
+@media (prefers-reduced-motion: reduce) { .running-bar-track { animation: none; } .running-bar-copy { display: none !important; } }

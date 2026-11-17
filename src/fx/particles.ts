@@ -10,7 +10,7 @@ export function createParticleSystem(maxParticles = 150) {
       for (let i=0;i<n;i++) { const a = Math.PI * 2 * i / n; add({x,y,vx:Math.cos(a)*150,vy:Math.sin(a)*150-70,life:900,age:0,radius:6,delay:0}); }
     },
     rain(durationMs:number,count:number) {
-      for (let i=0;i<count;i++) add({x:Math.random()*window.innerWidth,y:-15,vx:(Math.random()-.5)*35,vy:(window.innerHeight+40)/Math.max(0.3,durationMs/1000),life:durationMs,age:0,radius:5+Math.random()*5,delay:Math.random()*durationMs*.45});
+      for (let i=0;i<count;i++) { const delay=Math.random()*durationMs*.45; const life=durationMs-delay; add({x:Math.random()*window.innerWidth,y:-15,vx:(Math.random()-.5)*35,vy:(window.innerHeight+40)/Math.max(0.3,life/1000),life,age:0,radius:5+Math.random()*5,delay}); }
     },
     step(dtMs:number) {
       const dt=Math.max(0,dtMs); particles = particles.filter(p => { p.age+=dt; if(p.age > p.delay) { p.x+=p.vx*dt/1000; p.y+=p.vy*dt/1000; } return p.age < p.life+p.delay; });

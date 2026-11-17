@@ -59,7 +59,7 @@ vi.mock("./services/queries", () => ({
 import { TradingGrid } from "./TradingGrid";
 import { TradingView } from "./TradingView";
 import { WalletView } from "./WalletView";
-import { Header } from "./Header";
+import { Header } from "./shell/Header";
 
 function makeCell(overrides: Partial<RemoteCell> = {}): RemoteCell {
   const now = Date.now();

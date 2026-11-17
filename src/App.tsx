@@ -10,7 +10,7 @@ import { WalletView } from "./WalletView";
 import { ProofsView } from "./ProofsView";
 import { Toaster } from "react-hot-toast";
 
-import { Layout } from "./Layout";
+import { Layout } from "./shell/Layout";
 
 function App() {
   return (

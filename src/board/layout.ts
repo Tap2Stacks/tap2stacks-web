@@ -1,0 +1,59 @@
+export interface BoardViewport {
+  width: number;
+  height: number;
+  nowMs: number;
+  msPerPx: number;
+  centerPrice: number;
+  pricePerPx: number;
+}
+
+/** Maps a timestamp to canvas x with "now" fixed at 30% of board width. */
+export function timeToX(v: BoardViewport, ts: number): number {
+  return v.width * 0.3 + (ts - v.nowMs) / v.msPerPx;
+}
+
+/** Maps a price to canvas y with centerPrice at vertical center. */
+export function priceToY(v: BoardViewport, price: number): number {
+  return v.height / 2 - (price - v.centerPrice) / v.pricePerPx;
+}
+
+export function cellRect(
+  v: BoardViewport,
+  cell: { startTs: number; endTs: number; lower: number; upper: number },
+): { x: number; y: number; w: number; h: number } {
+  const x0 = timeToX(v, cell.startTs);
+  const x1 = timeToX(v, cell.endTs);
+  const yTop = priceToY(v, cell.upper);
+  const yBottom = priceToY(v, cell.lower);
+  return {
+    x: x0,
+    y: Math.min(yTop, yBottom),
+    w: Math.max(0, x1 - x0),
+    h: Math.max(0, Math.abs(yBottom - yTop)),
+  };
+}
+
+/** Returns the cell under (x, y), or undefined in the past area (left of now). */
+export function hitTestCell<
+  T extends { startTs: number; endTs: number; lower: number; upper: number },
+>(v: BoardViewport, cells: T[], x: number, y: number): T | undefined {
+  if (x < v.width * 0.3) return undefined;
+  for (const cell of cells) {
+    const r = cellRect(v, cell);
+    if (
+      r.w > 0 &&
+      r.h > 0 &&
+      x >= r.x &&
+      x < r.x + r.w &&
+      y >= r.y &&
+      y < r.y + r.h
+    ) {
+      return cell;
+    }
+  }
+  return undefined;
+}
+
+export function isLocked(startTs: number, nowMs: number): boolean {
+  return startTs < nowMs + 5000;
+}

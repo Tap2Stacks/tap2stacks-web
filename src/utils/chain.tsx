@@ -1,20 +1,22 @@
 /* eslint-disable react-refresh/only-export-components */
 import { ExternalLink } from "lucide-react";
 import toast from "react-hot-toast";
-import { LEGACY_TESTNET_EXPLORER_BASE_URL } from "../config/chains";
+import { BASE_SEPOLIA_EXPLORER_BASE_URL } from "../config/chains";
 
-export const EXPLORER_BASE_URL = LEGACY_TESTNET_EXPLORER_BASE_URL;
+export const EXPLORER_BASE_URL = BASE_SEPOLIA_EXPLORER_BASE_URL;
+export const TOKEN_SYMBOL = "tUSDC";
+export const TOKEN_DECIMALS = 6;
 
 export function formatTokenSymbol(symbol: string) {
   return symbol === "DEV" ? "$DEV" : symbol;
 }
 
 export function getExplorerTxUrl(hash: string) {
-  return `${EXPLORER_BASE_URL}/transaction/${hash}`;
+  return `${EXPLORER_BASE_URL}/tx/${hash}`;
 }
 
 export function getExplorerAddressUrl(address: string) {
-  return `${EXPLORER_BASE_URL}/account/${address}`;
+  return `${EXPLORER_BASE_URL}/address/${address}`;
 }
 
 export function getExplorerSearchUrl(value: string) {
@@ -22,13 +24,13 @@ export function getExplorerSearchUrl(value: string) {
 }
 
 export function getExplorerTopicMessagesUrl(topicId: string) {
-  return `${EXPLORER_BASE_URL}/topic/${topicId}/messages`;
+  return `${EXPLORER_BASE_URL}/search?q=${topicId}`;
 }
 
 export function showTransactionSubmittedToast({
   hash,
   title,
-  description = "You can track this transaction on Legacy Hashscan.",
+  description = "You can track this transaction on BaseScan.",
 }: {
   hash: string;
   title: string;

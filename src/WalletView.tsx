@@ -21,12 +21,14 @@ import {
   useWaitForTransactionReceipt,
   useWriteContract,
 } from "wagmi";
-import { formatUnits, parseUnits } from "viem";
+import { type Abi, formatUnits, parseUnits } from "viem";
 import { toast } from "react-hot-toast";
-import { legacyTestnet } from "./config/chains";
-import { POOL_RESERVE_ADDRESS, POOL_RESERVE_ABI } from "./contracts/abi";
+import { baseSepolia } from "./config/chains";
+import { ADDRESSES } from "./contracts/addresses";
+import tap2StacksVaultAbi from "./contracts/abi/Tap2StacksVault.json";
 import {
-  formatTokenSymbol,
+  TOKEN_DECIMALS,
+  TOKEN_SYMBOL,
   showTransactionSubmittedToast,
 } from "./utils/chain";
 import {
@@ -38,8 +40,9 @@ import {
 } from "./services/queries";
 
 const IN_APP_PER_TOKEN = 10;
-const NATIVE_SYMBOL = formatTokenSymbol(legacyTestnet.nativeCurrency.symbol);
-const NATIVE_DECIMALS = legacyTestnet.nativeCurrency.decimals;
+const NATIVE_SYMBOL = TOKEN_SYMBOL;
+const NATIVE_DECIMALS = TOKEN_DECIMALS;
+const VAULT_ABI = tap2StacksVaultAbi as Abi;
 const ACCENT = "#2D84EB";
 const SECONDARY = "#4F46E5";
 const DEEP = "#00156E";
@@ -159,7 +162,7 @@ export const WalletView: React.FC = () => {
 
   const { data: nativeBalance, refetch: refetchNativeBalance } = useBalance({
     address,
-    chainId: legacyTestnet.id,
+    chainId: baseSepolia.id,
     query: { enabled: !!address },
   });
 
@@ -220,27 +223,27 @@ export const WalletView: React.FC = () => {
     refetchOffChainBalance();
   }, [refetchNativeBalance, refetchOffChainBalance]);
 
-  const ensureLegacyTestnet = useCallback(async () => {
+  const ensureBaseSepolia = useCallback(async () => {
     if (!isConnected) {
       toast.error("Connect wallet to continue.");
       return false;
     }
 
-    if (chain?.id === legacyTestnet.id) {
+    if (chain?.id === baseSepolia.id) {
       return true;
     }
 
     if (!switchChainAsync) {
-      toast.error(`Switch to ${legacyTestnet.name} to continue.`);
+      toast.error(`Switch to ${baseSepolia.name} to continue.`);
       return false;
     }
 
     try {
-      await switchChainAsync({ chainId: legacyTestnet.id });
+      await switchChainAsync({ chainId: baseSepolia.id });
       return true;
     } catch (error) {
       console.error("Network switch failed", error);
-      toast.error(`Please switch to ${legacyTestnet.name} before continuing.`);
+      toast.error(`Please switch to ${baseSepolia.name} before continuing.`);
       return false;
     }
   }, [chain?.id, isConnected, switchChainAsync]);
@@ -375,8 +378,8 @@ export const WalletView: React.FC = () => {
   }, [claimTxHash, isClaimSuccess, refreshAll]);
 
   const handleDeposit = async () => {
-    const onLegacyTestnet = await ensureLegacyTestnet();
-    if (!onLegacyTestnet) return;
+    const onBaseSepolia = await ensureBaseSepolia();
+    if (!onBaseSepolia) return;
 
     if (!depositAmountStr || !isValidDepositAmount) {
       toast.error("Enter a valid amount");
@@ -391,16 +394,16 @@ export const WalletView: React.FC = () => {
     pendingDepositAmountRef.current = depositAmountStr;
 
     writeDepositTrader({
-      address: POOL_RESERVE_ADDRESS,
-      abi: POOL_RESERVE_ABI,
+      address: ADDRESSES.vault,
+      abi: VAULT_ABI,
       functionName: "depositTrader",
       value: depositTokenAmountRaw,
     });
   };
 
   const handleWithdraw = async () => {
-    const onLegacyTestnet = await ensureLegacyTestnet();
-    if (!onLegacyTestnet) return;
+    const onBaseSepolia = await ensureBaseSepolia();
+    if (!onBaseSepolia) return;
 
     if (!withdrawInAppStr || !isValidWithdrawAmount) {
       toast.error("Enter a valid in-app balance amount");
@@ -429,8 +432,8 @@ export const WalletView: React.FC = () => {
     }
 
     writeClaimTrader({
-      address: POOL_RESERVE_ADDRESS,
-      abi: POOL_RESERVE_ABI,
+      address: ADDRESSES.vault,
+      abi: VAULT_ABI,
       functionName: "claimTrader",
       args: [withdrawTokenAmountRaw],
     });
@@ -448,7 +451,7 @@ export const WalletView: React.FC = () => {
     setWithdrawInAppStr(offChainBalance.toString());
   };
 
-  const chainMismatch = isConnected && chain?.id !== legacyTestnet.id;
+  const chainMismatch = isConnected && chain?.id !== baseSepolia.id;
   const isInsufficientDeposit =
     depositTokenAmountRaw > (nativeBalance?.value ?? 0n);
   const isInsufficientWithdraw = rawWithdrawInApp > offChainBalance;
@@ -528,7 +531,7 @@ export const WalletView: React.FC = () => {
             className="rounded-md border px-2.5 py-1.5"
             style={{ borderColor: BORDER, background: SUBTLE_BG }}
           >
-            {legacyTestnet.name}
+            {baseSepolia.name}
           </span>
           <button
             type="button"
@@ -583,7 +586,7 @@ export const WalletView: React.FC = () => {
                 },
                 {
                   label: "Reserve Contract",
-                  value: `${POOL_RESERVE_ADDRESS.slice(0, 8)}...${POOL_RESERVE_ADDRESS.slice(-6)}`,
+                  value: `${ADDRESSES.vault.slice(0, 8)}...${ADDRESSES.vault.slice(-6)}`,
                   icon: ShieldCheck,
                 },
                 { label: "Current Rail", value: activeRailLabel, icon: Coins },
@@ -603,7 +606,7 @@ export const WalletView: React.FC = () => {
             </div>
             {chainMismatch ? (
               <p className="mt-3 text-xs text-[#ff8ca0]">
-                Wrong network. Please switch to {legacyTestnet.name}.
+                Wrong network. Please switch to {baseSepolia.name}.
               </p>
             ) : null}
           </div>
@@ -743,12 +746,12 @@ export const WalletView: React.FC = () => {
             {chainMismatch ? (
               <ActionButton
                 onClick={() =>
-                  void switchChainAsync?.({ chainId: legacyTestnet.id })
+                  void switchChainAsync?.({ chainId: baseSepolia.id })
                 }
                 disabled={isPendingSwitch}
                 pending={isPendingSwitch}
                 pendingLabel="SWITCHING NETWORK"
-                idleLabel={`SWITCH TO ${legacyTestnet.name.toUpperCase()}`}
+                idleLabel={`SWITCH TO ${baseSepolia.name.toUpperCase()}`}
               />
             ) : activeTab === "deposit" ? (
               <ActionButton

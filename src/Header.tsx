@@ -14,7 +14,7 @@ import {
 } from "wagmi";
 import { ChevronDown } from "lucide-react";
 import { BACKEND_URL } from "./constant";
-import { legacyTestnet } from "./config/chains";
+import { baseSepolia } from "./config/chains";
 import {
   authControllerGetChallenge,
   authControllerGetWssKey,
@@ -372,10 +372,10 @@ export const Header: React.FC = () => {
                 onClick={() => connect({ connector: connectors[0] })}
                 variant="primary"
               />
-            ) : chain?.id !== legacyTestnet.id ? (
+            ) : chain?.id !== baseSepolia.id ? (
               <HeaderButton
                 label={isPendingSwitch ? "Switching" : "Switch network"}
-                onClick={() => switchChain?.({ chainId: legacyTestnet.id })}
+                onClick={() => switchChain?.({ chainId: baseSepolia.id })}
                 variant="primary"
               />
             ) : !token ? (

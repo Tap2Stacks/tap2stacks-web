@@ -1,22 +1,23 @@
+/* eslint-disable react-refresh/only-export-components */
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { ReactNode } from "react";
 import { WagmiProvider, createConfig, http } from "wagmi";
-import { injected } from "wagmi/connectors";
-import { LEGACY_TESTNET_RPC_URL, legacyTestnet } from "../config/chains";
+import { baseAccount, injected } from "wagmi/connectors";
+import { BASE_SEPOLIA_RPC_URL, baseSepolia } from "../config/chains";
 
 const queryClient = new QueryClient();
 
-const config = createConfig({
-  chains: [legacyTestnet],
-  connectors: [injected()],
+export const wagmiConfig = createConfig({
+  chains: [baseSepolia],
+  connectors: [baseAccount({ appName: "tap2stacks" }), injected()],
   transports: {
-    [legacyTestnet.id]: http(LEGACY_TESTNET_RPC_URL),
+    [baseSepolia.id]: http(BASE_SEPOLIA_RPC_URL),
   },
 });
 
 export function Provider({ children }: { children: ReactNode }) {
   return (
-    <WagmiProvider config={config}>
+    <WagmiProvider config={wagmiConfig}>
       <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
     </WagmiProvider>
   );

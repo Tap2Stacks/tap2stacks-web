@@ -11,21 +11,27 @@ import { ProofsView } from "./ProofsView";
 import { Toaster } from "react-hot-toast";
 
 import { Layout } from "./shell/Layout";
+import { ComplianceBoundary } from "./compliance/ComplianceBoundary";
+import { installApiRegionMonitor } from "./compliance/regionMonitor";
+
+installApiRegionMonitor();
 
 function App() {
   return (
-    <Router>
-      <Toaster position="top-right" />
-      <Routes>
-        <Route element={<Layout />}>
-          <Route path="/" element={<Navigate to="/trade" replace />} />
-          <Route path="/trade" element={<TradePage />} />
-          <Route path="/history" element={<HistoryView />} />
-          <Route path="/wallet" element={<WalletView />} />
-          <Route path="/proofs" element={<ProofsView />} />
-        </Route>
-      </Routes>
-    </Router>
+    <ComplianceBoundary>
+      <Router>
+        <Toaster position="top-right" />
+        <Routes>
+          <Route element={<Layout />}>
+            <Route path="/" element={<Navigate to="/trade" replace />} />
+            <Route path="/trade" element={<TradePage />} />
+            <Route path="/history" element={<HistoryView />} />
+            <Route path="/wallet" element={<WalletView />} />
+            <Route path="/proofs" element={<ProofsView />} />
+          </Route>
+        </Routes>
+      </Router>
+    </ComplianceBoundary>
   );
 }
 

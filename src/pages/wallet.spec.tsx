@@ -15,6 +15,7 @@ const mockSendTransactionAsync = vi.fn();
 const mockRefetchReads = vi.fn();
 const mockRefetchBalance = vi.fn();
 const mockRequestWithdrawal = vi.fn();
+const mockFetchPaymasterToken = vi.fn();
 const { mockToast } = vi.hoisted(() => ({
   mockToast: Object.assign(vi.fn(), {
     success: vi.fn(),
@@ -67,6 +68,11 @@ vi.mock("@wagmi/core", () => ({
   waitForTransactionReceipt: vi.fn(async () => ({ status: "success" })),
 }));
 
+vi.mock("../services/paymaster", () => ({
+  fetchPaymasterToken: (...args: unknown[]) =>
+    mockFetchPaymasterToken(...args),
+}));
+
 vi.mock("../services/queries", () => ({
   useAccountControllerGetBalance: () => ({
     data: mockOffChainBalance,
@@ -107,6 +113,10 @@ describe("WalletView", () => {
     mockRefetchReads.mockReset();
     mockRefetchBalance.mockReset();
     mockRequestWithdrawal.mockReset();
+    mockFetchPaymasterToken.mockReset().mockResolvedValue({
+      token: "tok-wallet",
+      expiresAt: Date.now() + 900_000,
+    });
     mockToast.mockReset();
     mockToast.success.mockReset();
     mockToast.error.mockReset();

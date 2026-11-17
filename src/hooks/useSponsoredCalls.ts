@@ -1,4 +1,5 @@
 import { useCallback } from "react";
+import toast from "react-hot-toast";
 import { waitForCallsStatus, waitForTransactionReceipt } from "@wagmi/core";
 import { decodeFunctionData, type Abi, type Hash } from "viem";
 import {
@@ -14,11 +15,21 @@ import { BACKEND_URL } from "../constant";
 import testUsdcAbi from "../contracts/abi/TestUSDC.json";
 import tap2StacksVaultAbi from "../contracts/abi/Tap2StacksVault.json";
 import type { Call } from "../lib/calls";
+import {
+  fetchPaymasterToken,
+  type PaymasterTokenResponse,
+} from "../services/paymaster";
 
 const CONTRACT_ABIS: readonly Abi[] = [
   testUsdcAbi as Abi,
   tap2StacksVaultAbi as Abi,
 ];
+const TOKEN_REFRESH_BUFFER_MS = 60_000;
+const tokenCache = new Map<string, PaymasterTokenResponse>();
+
+export function clearPaymasterTokenCache(): void {
+  tokenCache.clear();
+}
 
 interface CapabilityEntry {
   paymasterService?: {
@@ -57,6 +68,17 @@ function decodeKnownCall(call: Call): {
   return null;
 }
 
+async function getPaymasterToken(address: string | undefined): Promise<string> {
+  const key = address ? address.toLowerCase() : "anonymous";
+  const cached = tokenCache.get(key);
+  if (cached && Date.now() < cached.expiresAt - TOKEN_REFRESH_BUFFER_MS) {
+    return cached.token;
+  }
+  const fresh = await fetchPaymasterToken();
+  tokenCache.set(key, fresh);
+  return fresh.token;
+}
+
 async function sendSequentialCalls(
   calls: Call[],
   config: ReturnType<typeof useConfig> | undefined,
@@ -93,8 +115,8 @@ async function sendSequentialCalls(
 }
 
 /**
- * Send batched calls with EIP-5792 paymasterService sponsorship when supported on
- * Base Sepolia; otherwise execute calls sequentially via writeContract/sendTransaction.
+ * Send batched calls with EIP-5792 paymasterService sponsorship using a short-lived
+ * tokenized paymaster URL; fall back to sequential calls if unsupported or token fetch fails.
  */
 export function useSponsoredCalls(): {
   send: (calls: Call[]) => Promise<Hash | string>;
@@ -128,7 +150,20 @@ export function useSponsoredCalls(): {
         );
       }
 
-      const paymasterUrl = `${BACKEND_URL}/api/paymaster`;
+      let token: string;
+      try {
+        token = await getPaymasterToken(address);
+      } catch {
+        toast("You pay gas");
+        return sendSequentialCalls(
+          calls,
+          config,
+          writeContractAsync,
+          sendTransactionAsync,
+        );
+      }
+
+      const paymasterUrl = `${BACKEND_URL}/api/paymaster/t/${encodeURIComponent(token)}`;
       const result = await sendCallsAsync({
         chainId: baseSepolia.id,
         calls,
@@ -141,6 +176,7 @@ export function useSponsoredCalls(): {
       return id;
     },
     [
+      address,
       config,
       sendCallsAsync,
       sendTransactionAsync,

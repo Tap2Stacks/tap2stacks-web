@@ -1,11 +1,8 @@
 import React from "react";
-import { Outlet, useLocation } from "react-router-dom";
+import { Outlet } from "react-router-dom";
 import { Header } from "./Header";
 
 export const Layout: React.FC = () => {
-  const location = useLocation();
-  const isIntro = location.pathname === "/";
-
   return (
     <div
       className="flex h-screen w-full text-white font-sans overflow-hidden relative"
@@ -31,7 +28,7 @@ export const Layout: React.FC = () => {
       <main
         className="relative z-10 flex h-full flex-1 flex-col overflow-auto transition-all duration-300"
       >
-        {!isIntro && <Header />}
+        <Header />
         <Outlet />
       </main>
     </div>

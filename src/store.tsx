@@ -17,6 +17,7 @@ export interface CellData {
 }
 
 export interface RemoteCell {
+  ticker: string;
   gridTs: number;
   startTs: number;
   endTs: number;
@@ -24,7 +25,6 @@ export interface RemoteCell {
   upperPrice: string;
   rewardRate: string;
   gridSignature: string;
-  betable?: boolean;
 }
 
 interface GameState {
@@ -54,18 +54,6 @@ interface GameState {
   tickTime: () => void;
   updateGrid: (newCells: RemoteCell[]) => void;
   updateBalance: (balance: number) => void;
-  syncTapSnapshot: (payload: {
-    price?: number;
-    serverTs?: number;
-    cells?: RemoteCell[];
-    balance?: number;
-  }) => void;
-  syncTapBets: (bets: {
-    pending?: Array<Record<string, unknown>>;
-    active?: Array<Record<string, unknown>>;
-    resolved?: Array<Record<string, unknown>>;
-    history?: Array<Record<string, unknown>>;
-  }) => void;
   setBetAmount: (amount: number) => void;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   setOpenBets: (orders: any[]) => void;
@@ -108,118 +96,6 @@ export const useGameStore = create<GameState>((set) => ({
       };
     }),
 
-  syncTapSnapshot: ({ price, serverTs, cells, balance }) =>
-    set((state) => {
-      const nextState: Partial<GameState> = {};
-      if (typeof price === "number") {
-        const now = Date.now();
-        let newOffset = state.serverTimeOffset;
-        if (serverTs) {
-          const rawOffset = serverTs - now;
-          newOffset =
-            state.serverTimeOffset === 0
-              ? rawOffset
-              : state.serverTimeOffset * 0.95 + rawOffset * 0.05;
-        }
-        const syncedNow = now + newOffset;
-        nextState.currentPrice = price;
-        nextState.serverTimeOffset = newOffset;
-        nextState.history = [...state.history, { time: syncedNow, price }].filter(
-          (p) => syncedNow - p.time <= 120000,
-        );
-      }
-      if (typeof balance === "number") {
-        const pendingWinsTotal = Object.values(state.pendingWins).reduce(
-          (a, b) => a + b,
-          0,
-        );
-        nextState.serverBalance = balance;
-        nextState.balance = balance - pendingWinsTotal;
-      }
-      if (cells) {
-        const now = Date.now() + state.serverTimeOffset;
-        const remoteIds = new Set<string>();
-        const combinedCells = [...state.cells];
-        for (const remoteCell of cells) {
-          const id = `${remoteCell.startTs}:${remoteCell.endTs}:${remoteCell.lowerPrice}:${remoteCell.upperPrice}`;
-          const timeWindowStart = remoteCell.startTs;
-          const timeWindowEnd = remoteCell.endTs;
-          const priceLevel =
-            (parseFloat(remoteCell.lowerPrice) + parseFloat(remoteCell.upperPrice)) /
-            2;
-          const hasBet =
-            (state.bets[id] && state.bets[id] > 0) ||
-            (state.pendingBets[id] && state.pendingBets[id] > 0);
-          const existingIdx = combinedCells.findIndex((c) => c.id === id);
-          let finalMultiplier = parseFloat(remoteCell.rewardRate);
-          if (hasBet) {
-            if (state.betRates[id] !== undefined) finalMultiplier = state.betRates[id];
-            else if (existingIdx !== -1) finalMultiplier = combinedCells[existingIdx].multiplier;
-          }
-          remoteIds.add(id);
-          if (existingIdx === -1) {
-            combinedCells.push({
-              id,
-              timeWindowStart,
-              timeWindowEnd,
-              priceLevel,
-              multiplier: finalMultiplier,
-              status: timeWindowEnd < now ? "past" : "active",
-              original: remoteCell,
-            });
-          } else {
-            combinedCells[existingIdx] = {
-              ...combinedCells[existingIdx],
-              timeWindowStart,
-              timeWindowEnd,
-              priceLevel,
-              multiplier: finalMultiplier,
-              original: remoteCell,
-            };
-          }
-        }
-        nextState.cells = combinedCells.filter((c) => c.timeWindowEnd > now - 60000);
-        if (cells.length) {
-          const mid = cells[Math.floor(cells.length / 2)];
-          nextState.basePrice =
-            (parseFloat(mid.lowerPrice) + parseFloat(mid.upperPrice)) / 2;
-          nextState.modePriceStep = parseFloat(mid.upperPrice) - parseFloat(mid.lowerPrice);
-        }
-      }
-      return nextState as GameState;
-    }),
-
-  syncTapBets: (bets) =>
-    set(() => {
-      const nextBets: Record<string, number> = {};
-      const nextBetRates: Record<string, number> = {};
-      const nextPendingBets: Record<string, number> = {};
-      const nextPendingWins: Record<string, number> = {};
-
-      for (const bet of bets.pending ?? []) {
-        const cellId = `${bet.window_start}:${bet.window_end}:${bet.L}:${bet.R}`;
-        nextPendingBets[cellId] = Number(bet.stake) || 0;
-        nextBetRates[cellId] = Number(bet.locked_multiplier) || 0;
-      }
-      for (const bet of bets.active ?? []) {
-        const cellId = `${bet.window_start}:${bet.window_end}:${bet.L}:${bet.R}`;
-        nextBets[cellId] = Number(bet.stake) || 0;
-        nextBetRates[cellId] = Number(bet.locked_multiplier) || 0;
-      }
-      for (const bet of bets.resolved ?? []) {
-        const cellId = `${bet.window_start}:${bet.window_end}:${bet.L}:${bet.R}`;
-        if (bet.win) {
-          nextPendingWins[cellId] = Number(bet.payout) || 0;
-        }
-      }
-      return {
-        bets: nextBets,
-        betRates: nextBetRates,
-        pendingBets: nextPendingBets,
-        pendingWins: nextPendingWins,
-      };
-    }),
-
   syncServerTime: (serverTs) =>
     set(() => ({
       serverTimeOffset: serverTs - Date.now(),
@@ -234,12 +110,15 @@ export const useGameStore = create<GameState>((set) => ({
       const newBetRates = { ...state.betRates };
       for (const order of orders) {
         if (order.status === "OPEN") {
+          const ticker = order.ticker || order.cell?.ticker || order.marketId;
           const start =
             order.cellTimeStart || order.cell?.startTs || order.startTs;
           const end = order.cellTimeEnd || order.cell?.endTs || order.endTs;
           const lower = order.lowerPrice || order.cell?.lowerPrice;
           const upper = order.upperPrice || order.cell?.upperPrice;
-          const cellId = `${start}:${end}:${lower}:${upper}`;
+          const cellId = ticker
+            ? `${ticker}:${start}:${end}:${lower}:${upper}`
+            : `${start}:${end}:${lower}:${upper}`;
           newBets[cellId] = Number(order.amount) || 0;
 
           const rate = order.rewardRate || order.cell?.rewardRate;
@@ -256,11 +135,14 @@ export const useGameStore = create<GameState>((set) => ({
     set((state) => {
       let newState = { ...state };
 
+      const ticker = data.ticker || data.cell?.ticker || data.marketId;
       const start = data.cellTimeStart || data.cell?.startTs || data.startTs;
       const end = data.cellTimeEnd || data.cell?.endTs || data.endTs;
       const lower = data.lowerPrice || data.cell?.lowerPrice;
       const upper = data.upperPrice || data.cell?.upperPrice;
-      let cellId = `${start}:${end}:${lower}:${upper}`;
+      let cellId = ticker
+        ? `${ticker}:${start}:${end}:${lower}:${upper}`
+        : `${start}:${end}:${lower}:${upper}`;
 
       if (data.status === "OPEN") {
         const newPendingBets = { ...newState.pendingBets };
@@ -497,7 +379,7 @@ export const useGameStore = create<GameState>((set) => ({
       const combinedCells = [...state.cells];
 
       for (const remoteCell of newCells) {
-        const id = `${remoteCell.startTs}:${remoteCell.endTs}:${remoteCell.lowerPrice}:${remoteCell.upperPrice}`;
+        const id = `${remoteCell.ticker}:${remoteCell.startTs}:${remoteCell.endTs}:${remoteCell.lowerPrice}:${remoteCell.upperPrice}`;
         const timeWindowStart = remoteCell.startTs;
         const timeWindowEnd = remoteCell.endTs;
         const priceLevel =

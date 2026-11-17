@@ -5,7 +5,6 @@ import { TradingGrid } from "./TradingGrid";
 import { useGameStore } from "./store";
 import { useOrderControllerGetUserOrders } from "./services/queries";
 import { HowItWorksModal } from "./HowItWorksModal";
-import { IS_TAP_TRADING_BACKEND } from "./constant";
 
 const ACCENT = "#2D84EB";
 const SECONDARY = "#4F46E5";
@@ -40,7 +39,7 @@ export const TradingView: React.FC = () => {
     },
     {
       query: {
-        enabled: !IS_TAP_TRADING_BACKEND && !!address,
+        enabled: !!address,
         queryKey: ["open-orders", address],
       },
     },

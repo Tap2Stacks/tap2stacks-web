@@ -13,7 +13,7 @@ import {
   useSwitchChain,
 } from "wagmi";
 import { ChevronDown } from "lucide-react";
-import { BACKEND_URL, IS_TAP_TRADING_BACKEND } from "./constant";
+import { BACKEND_URL } from "./constant";
 import { legacyTestnet } from "./config/chains";
 import {
   authControllerGetChallenge,
@@ -29,7 +29,7 @@ const NAV_ITEMS = [
   { label: "Trade", path: "/trade" },
   { label: "History", path: "/history" },
   { label: "Wallet", path: "/wallet" },
-  { label: "HCS Anchor", path: "/hcs-anchor" },
+  { label: "Proofs", path: "/proofs" },
 ] as const;
 
 const ACCENT = "#2D84EB";
@@ -84,8 +84,6 @@ export const Header: React.FC = () => {
   const setConnection = useGameStore((state) => state.setConnection);
   const updateOrder = useGameStore((state) => state.updateOrder);
   const updateBalance = useGameStore((state) => state.updateBalance);
-  const syncTapSnapshot = useGameStore((state) => state.syncTapSnapshot);
-  const syncTapBets = useGameStore((state) => state.syncTapBets);
 
   const location = useLocation();
   const { address, isConnected, chain } = useAccount();
@@ -110,8 +108,8 @@ export const Header: React.FC = () => {
   const { data: balanceData, refetch: refetchBalance } =
     useAccountControllerGetBalance({
       query: {
-        enabled: !IS_TAP_TRADING_BACKEND,
-        queryKey: ["tap-trading-balance-disabled"],
+        enabled: !!token,
+        queryKey: getAccountControllerGetBalanceQueryKey(),
       },
     });
 
@@ -196,95 +194,11 @@ export const Header: React.FC = () => {
   };
 
   useEffect(() => {
-    if (IS_TAP_TRADING_BACKEND) return;
     handleLogin();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isConnected, address]);
 
   useEffect(() => {
-    if (IS_TAP_TRADING_BACKEND) {
-      const source = new EventSource(`${BACKEND_URL}/stream`);
-      const syncPayload = (payload: Record<string, unknown>) => {
-        const grid = payload.grid as
-          | Record<string, { cells?: Array<Record<string, unknown>> }>
-          | undefined;
-        const mode20 = grid?.["20"];
-        const balanceValue =
-          (payload.balances as Record<string, unknown> | undefined)?.player ??
-          payload.player_balance;
-        syncTapSnapshot({
-          price: Number(payload.P_render ?? payload.P_oracle ?? 0),
-          serverTs: Date.now(),
-          cells: Array.isArray(mode20?.cells)
-            ? mode20.cells.map((cell) => {
-                // Use stable absolute timestamps from backend (no Date.now() drift)
-                const startMs = Number(cell.startTs_ms ?? 0);
-                const endMs = Number(cell.endTs_ms ?? 0);
-                if (startMs > 0 && endMs > 0) {
-                  return {
-                    gridTs: Number(payload.oracle_second ?? 0),
-                    startTs: startMs,
-                    endTs: endMs,
-                    lowerPrice: String(cell.L),
-                    upperPrice: String(cell.R),
-                    rewardRate: String(cell.M_final),
-                    gridSignature: String(cell.cell_id),
-                    betable: Boolean(cell.betable),
-                  };
-                }
-                // Fallback for backends without startTs_ms
-                const now = Date.now();
-                const originalStart = Number(cell.T_start ?? 0);
-                const originalEnd = Number(cell.T_end ?? 0);
-                const remainingStart = Number(cell.remaining_T_start ?? originalStart);
-                const elapsedMs = (originalStart - remainingStart) * 1000;
-                const cycleStartedAt = now - elapsedMs;
-                return {
-                  gridTs: Number(payload.oracle_second ?? 0),
-                  startTs: cycleStartedAt + originalStart * 1000,
-                  endTs: cycleStartedAt + originalEnd * 1000,
-                  lowerPrice: String(cell.L),
-                  upperPrice: String(cell.R),
-                  rewardRate: String(cell.M_final),
-                  gridSignature: String(cell.cell_id),
-                  betable: Boolean(cell.betable),
-                };
-              })
-            : undefined,
-          balance:
-            balanceValue !== undefined ? Number(balanceValue) : undefined,
-        });
-        if (payload.bets) {
-          syncTapBets(payload.bets as {
-            pending?: Array<Record<string, unknown>>;
-            active?: Array<Record<string, unknown>>;
-            resolved?: Array<Record<string, unknown>>;
-            history?: Array<Record<string, unknown>>;
-          });
-        }
-      };
-
-      fetch(`${BACKEND_URL}/status`)
-        .then(async (response) => response.json())
-        .then((payload) => {
-          syncPayload(payload);
-        })
-        .catch((error) => {
-          console.error("tap-trading status bootstrap failed", error);
-        });
-
-      source.addEventListener("oracle_tick", (event) => {
-        syncPayload(JSON.parse((event as MessageEvent).data || "{}"));
-      });
-      source.addEventListener("render_tick", (event) => {
-        syncPayload(JSON.parse((event as MessageEvent).data || "{}"));
-      });
-      source.onerror = () => {
-        console.error("tap-trading stream disconnected");
-      };
-      return () => source.close();
-    }
-
     let socket: Socket | null = null;
     let isActive = true;
 
@@ -374,8 +288,6 @@ export const Header: React.FC = () => {
     address,
     queryClient,
     setConnection,
-    syncTapBets,
-    syncTapSnapshot,
     token,
     updateGrid,
     updateOrder,

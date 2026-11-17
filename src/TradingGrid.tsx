@@ -7,7 +7,6 @@ import confetti from "canvas-confetti";
 import CryptoJS from "crypto-js";
 import { useAccount } from "wagmi";
 import toast from "react-hot-toast";
-import { BACKEND_URL, IS_TAP_TRADING_BACKEND } from "./constant";
 
 function cn(...inputs: (string | undefined | null | false)[]) {
   return twMerge(clsx(inputs));
@@ -199,7 +198,7 @@ export const TradingGrid: React.FC = () => {
 
   const handlePlaceBet = (cell: CellData, canBet: boolean) => {
     try {
-      if (!IS_TAP_TRADING_BACKEND && cell.timeWindowStart > now && cell.timeWindowStart - now <= 5000) {
+      if (cell.timeWindowStart > now && cell.timeWindowStart - now <= 5000) {
         const hasBet = bets[cell.id] || pendingBets[cell.id];
         if (!hasBet) {
           toast("Cell closing soon. Select another!", {
@@ -222,7 +221,7 @@ export const TradingGrid: React.FC = () => {
         }
       }
       if (canBet) {
-        if (!IS_TAP_TRADING_BACKEND && !localStorage.getItem("token")) {
+        if (!localStorage.getItem("token")) {
           toast("Connect wallet & login to trade!", {
             icon: "🔐",
             style: {
@@ -281,32 +280,10 @@ export const TradingGrid: React.FC = () => {
           return;
         }
 
-        if (IS_TAP_TRADING_BACKEND) {
-          fetch(`${BACKEND_URL}/bet/basket`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              mode_id: "20",
-              selections: [{ cell_id: Number(cell.original.gridSignature), stake: betAmount }],
-            }),
-          })
-            .then(async (response) => {
-              const data = await response.json();
-              if (!response.ok || data.ok === false) {
-                throw new Error(data.error || "Bet rejected");
-              }
-              placeBet(cell.id, betAmount);
-            })
-            .catch((error) => {
-              toast.error(error instanceof Error ? error.message : "Bet failed");
-            });
-          return;
-        }
-
         if (socket && wssKey) {
           const amountStr = betAmount.toString();
           const cellOrigin = cell.original;
-          const cellId = `${cellOrigin.startTs}:${cellOrigin.endTs}:${cellOrigin.lowerPrice}:${cellOrigin.upperPrice}`;
+          const cellId = `${cellOrigin.ticker}:${cellOrigin.startTs}:${cellOrigin.endTs}:${cellOrigin.lowerPrice}:${cellOrigin.upperPrice}`;
           const message = `${cellOrigin.gridTs}:${cellId}:${amountStr}`;
 
           const hmac = CryptoJS.algo.HMAC.create(
@@ -318,7 +295,7 @@ export const TradingGrid: React.FC = () => {
 
           const payload = {
             userId: address,
-            marketId: "BTCUSDT",
+            marketId: cellOrigin.ticker,
             amount: amountStr,
             cell: cellOrigin,
             userSignature: signature,
@@ -534,20 +511,13 @@ export const TradingGrid: React.FC = () => {
             const hasPendingWin = pendingWins[cell.id] !== undefined;
             if (isPast && !isHit && !hasPendingWin) return null;
 
-            // In TAP mode, hide non-betable cells (e.g. cell containing current price)
-            // unless the user already has a bet on it
-            if (IS_TAP_TRADING_BACKEND && !cell.original.betable && !hasAnyBet && !isHit) return null;
-
             const left = getTimeX(cell.timeWindowStart);
             const top = getPriceY(cell.priceLevel + modePriceStep / 2);
             const isFuture = cell.timeWindowStart > now;
 
             const intervalMs = 5000;
             const isNext = isFuture && cell.timeWindowStart - now <= intervalMs;
-            const canBet =
-              IS_TAP_TRADING_BACKEND
-                ? Boolean(cell.original.betable) && isFuture && !hasAnyBet
-                : isFuture && !isNext && !hasAnyBet;
+            const canBet = isFuture && !isNext && !hasAnyBet;
 
             return (
               <div

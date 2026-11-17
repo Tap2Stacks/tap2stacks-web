@@ -37,3 +37,4 @@ coverage/
 
 # Build
 build/
+.handoff/

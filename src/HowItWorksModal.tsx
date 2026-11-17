@@ -1,33 +1,51 @@
-import React, { useState, useEffect } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import React, { useEffect, useState } from "react";
+import { AnimatePresence, motion } from "framer-motion";
 import {
-  Wallet,
-  MousePointer2,
-  Rocket,
-  X,
-  ChevronRight,
-  Check,
   ArrowDownToLine,
   ArrowUpFromLine,
+  Check,
+  ChevronRight,
+  MousePointer2,
+  Rocket,
+  Wallet,
+  X,
 } from "lucide-react";
 
-const ACCENT = "#2D84EB";
-const SECONDARY = "#4F46E5";
-const DEEP = "#00156E";
+const steps = [
+  {
+    title: "Welcome to tap2stacks",
+    description: "Drop coins on the price board and watch the market move.",
+    icon: Rocket,
+  },
+  {
+    title: "1. Connect & Login",
+    description: "Connect your wallet, then sign a message to authenticate without gas fees.",
+    icon: Wallet,
+  },
+  {
+    title: "2. Deposit Tokens",
+    description: "Deposit on-chain tokens to receive an in-app balance for play.",
+    icon: ArrowDownToLine,
+  },
+  {
+    title: "3. Drop Your Coins",
+    description: "Coins stack on a cell, up to $100 per cell. If the price line passes through your cell during its 5 seconds, you win.",
+    icon: MousePointer2,
+  },
+  {
+    title: "4. Win & Withdraw!",
+    description: "Bigger wins rain coins. Winnings are credited to your in-app balance, and you can withdraw back to on-chain tokens.",
+    icon: ArrowUpFromLine,
+  },
+];
 
 export const HowItWorksModal: React.FC = () => {
   const [isOpen, setIsOpen] = useState(false);
   const [currentStep, setCurrentStep] = useState(0);
 
   useEffect(() => {
-    // Small delay to make it feel more natural when loading
     const timer = setTimeout(() => {
-      const hasSeenOnboarding = localStorage.getItem(
-        "hasSeenTradingOnboarding",
-      );
-      if (!hasSeenOnboarding) {
-        setIsOpen(true);
-      }
+      if (!localStorage.getItem("hasSeenTradingOnboarding")) setIsOpen(true);
     }, 500);
     return () => clearTimeout(timer);
   }, []);
@@ -37,159 +55,76 @@ export const HowItWorksModal: React.FC = () => {
     setIsOpen(false);
   };
 
-  const steps = [
-    {
-      title: "Welcome to tap2stacks",
-      description:
-        "Experience the fastest grid-based trading game. Let's walk through how to play and win.",
-      icon: <Rocket className="w-10 h-10" style={{ color: ACCENT }} />,
-    },
-    {
-      title: "1. Connect & Login",
-      description:
-        "Start by connecting your wallet. Then, sign a message to authenticate securely with zero gas fees.",
-      icon: <Wallet className="w-10 h-10" style={{ color: SECONDARY }} />,
-    },
-    {
-      title: "2. Deposit Tokens",
-      description:
-        "Deposit your on-chain tokens to receive an instant in-app balance. This powers lightning-fast gameplay without waiting for block confirmations.",
-      icon: <ArrowDownToLine className="w-10 h-10" style={{ color: ACCENT }} />,
-    },
-    {
-      title: "3. Place Your Bet",
-      description:
-        "Use your in-app balance to place bets on any cell. Each cell represents a unique multiplier and winning odds.",
-      icon: (
-        <MousePointer2 className="w-10 h-10" style={{ color: SECONDARY }} />
-      ),
-    },
-    {
-      title: "4. Win & Withdraw!",
-      description:
-        "Winning bets are credited instantly to your in-app balance. You can withdraw your winnings back to on-chain tokens at any time.",
-      icon: <ArrowUpFromLine className="w-10 h-10" style={{ color: ACCENT }} />,
-    },
-  ];
-
   const nextStep = () => {
-    if (currentStep < steps.length - 1) {
-      setCurrentStep((prev) => prev + 1);
-    } else {
-      handleDismiss();
-    }
+    if (currentStep < steps.length - 1) setCurrentStep((previous) => previous + 1);
+    else handleDismiss();
   };
 
+  const step = steps[currentStep];
+  const Icon = step.icon;
   return (
     <AnimatePresence>
       {isOpen && (
-        <div className="fixed inset-0 z-100 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+        <div className="fixed inset-0 z-100 flex items-center justify-center bg-ink/50 p-4">
           <motion.div
             initial={{ opacity: 0, scale: 0.95, y: 20 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: 20 }}
-            className="relative w-full max-w-md overflow-hidden rounded-2xl border border-white/10 bg-[linear-gradient(160deg,rgba(13,21,44,0.96)_0%,rgba(8,11,22,0.98)_100%)] shadow-2xl"
+            className="relative w-full max-w-md overflow-hidden rounded-xl border-2 border-ink bg-paper text-ink shadow-xl"
           >
-            {/* Ambient Background Glow */}
-            <div
-              className="absolute -top-24 -right-24 h-48 w-48 rounded-full blur-[80px]"
-              style={{ background: "rgba(45,132,235,0.24)" }}
-            />
-            <div
-              className="absolute -bottom-24 -left-24 h-48 w-48 rounded-full blur-[80px]"
-              style={{ background: "rgba(79,70,229,0.22)" }}
-            />
-
             <button
+              type="button"
               onClick={handleDismiss}
-              className="absolute right-4 top-4 z-10 rounded-full p-1 text-white/50 transition-colors hover:bg-white/10 hover:text-white"
+              aria-label="Close how it works"
+              className="absolute right-4 top-4 rounded-lg p-1 hover:bg-yellow"
             >
               <X className="h-5 w-5" />
             </button>
-
-            <div className="relative p-6 sm:p-8">
-              <AnimatePresence mode="wait">
-                <motion.div
-                  key={`icon-${currentStep}`}
-                  initial={{ opacity: 0, scale: 0.8, rotate: -10 }}
-                  animate={{ opacity: 1, scale: 1, rotate: 0 }}
-                  exit={{ opacity: 0, scale: 0.8, rotate: 10 }}
-                  transition={{ type: "spring", stiffness: 300, damping: 20 }}
-                  className="mb-6 flex justify-center"
-                >
-                  <div className="flex h-20 w-20 items-center justify-center rounded-2xl border border-white/10 bg-white/5 shadow-inner backdrop-blur-md">
-                    {steps[currentStep].icon}
-                  </div>
-                </motion.div>
-              </AnimatePresence>
-
-              <div className="text-center min-h-[120px]">
+            <div className="p-6 sm:p-8">
+              <div className="mb-6 flex justify-center">
+                <div className="flex h-20 w-20 items-center justify-center rounded-xl border-2 border-ink bg-yellow">
+                  <Icon className="h-10 w-10" />
+                </div>
+              </div>
+              <div className="min-h-[120px] text-center">
                 <AnimatePresence mode="wait">
                   <motion.div
-                    key={`text-${currentStep}`}
+                    key={currentStep}
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: -10 }}
                     transition={{ duration: 0.2 }}
                   >
-                    <h2 className="mb-2 text-2xl font-bold text-white">
-                      {steps[currentStep].title}
-                    </h2>
-                    <p className="text-[15px] leading-relaxed text-white/70">
-                      {steps[currentStep].description}
-                    </p>
+                    <h2 className="mb-2 text-2xl font-bold">{step.title}</h2>
+                    <p className="text-[15px] leading-relaxed text-ink/75">{step.description}</p>
                   </motion.div>
                 </AnimatePresence>
               </div>
-
-              <div className="mt-8 flex items-center justify-between">
-                <div className="flex space-x-1.5">
-                  {steps.map((_, idx) => (
+              <p className="mt-5 text-center text-xs leading-relaxed text-ink/70">
+                Testnet game. Test USDC has no value. Not for US persons. 18+.
+              </p>
+              <div className="mt-6 flex items-center justify-between gap-3">
+                <div className="flex space-x-1.5" aria-label={`Step ${currentStep + 1} of ${steps.length}`}>
+                  {steps.map((item, index) => (
                     <div
-                      key={idx}
-                      className={`h-1.5 rounded-full transition-all duration-300 ${
-                        idx === currentStep ? "w-6" : "w-1.5 bg-white/20"
-                      }`}
-                      style={
-                        idx === currentStep
-                          ? {
-                              background:
-                                "linear-gradient(90deg, #2D84EB 0%, #4F46E5 100%)",
-                            }
-                          : undefined
-                      }
+                      key={item.title}
+                      className={`h-1.5 rounded-full ${index === currentStep ? "w-6 bg-ink" : "w-1.5 bg-ink/20"}`}
                     />
                   ))}
                 </div>
-
-                <div className="flex items-center space-x-3">
-                  {currentStep < steps.length - 1 ? (
-                    <button
-                      onClick={handleDismiss}
-                      className="text-sm font-medium text-white/50 transition-colors hover:text-white px-2 py-2"
-                    >
+                <div className="flex items-center gap-3">
+                  {currentStep < steps.length - 1 && (
+                    <button type="button" onClick={handleDismiss} className="px-2 py-2 text-sm text-ink/70 hover:text-ink">
                       Skip
                     </button>
-                  ) : null}
-
+                  )}
                   <button
+                    type="button"
                     onClick={nextStep}
-                    className="group relative flex items-center justify-center gap-2 overflow-hidden rounded-lg px-5 py-2.5 text-sm font-semibold text-white shadow-lg transition-all hover:scale-105 active:scale-95"
-                    style={{
-                      background: `linear-gradient(135deg, ${ACCENT} 0%, ${SECONDARY} 60%, ${DEEP} 100%)`,
-                      boxShadow: "0 12px 28px rgba(45,132,235,0.3)",
-                    }}
+                    className="flex items-center justify-center gap-2 rounded-lg border-2 border-ink bg-highlight px-5 py-2.5 text-sm font-bold transition hover:brightness-95"
                   >
-                    <span className="relative z-10">
-                      {currentStep === steps.length - 1
-                        ? "Start Playing"
-                        : "Next"}
-                    </span>
-                    {currentStep === steps.length - 1 ? (
-                      <Check className="relative z-10 h-4 w-4" />
-                    ) : (
-                      <ChevronRight className="relative z-10 h-4 w-4 transition-transform group-hover:translate-x-1" />
-                    )}
+                    {currentStep === steps.length - 1 ? "Start Playing" : "Next"}
+                    {currentStep === steps.length - 1 ? <Check className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
                   </button>
                 </div>
               </div>

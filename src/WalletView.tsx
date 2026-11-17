@@ -1,551 +1,57 @@
-import React, {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
-import {
-  ArrowDownUp,
-  CircleDollarSign,
-  Coins,
-  Droplets,
-  RefreshCw,
-  ShieldCheck,
-  Wallet,
-} from "lucide-react";
-import {
-  useAccount,
-  useBalance,
-  useSwitchChain,
-  useWaitForTransactionReceipt,
-  useWriteContract,
-} from "wagmi";
-import { type Abi, formatUnits, parseUnits } from "viem";
-import { toast } from "react-hot-toast";
+import React from "react";
+import { ArrowDownUp, CircleDollarSign, Coins, Droplets, RefreshCw, ShieldCheck, Wallet } from "lucide-react";
 import { baseSepolia } from "./config/chains";
-import { getAddresses, type ContractAddresses } from "./contracts/addresses";
-import tap2StacksVaultAbi from "./contracts/abi/Tap2StacksVault.json";
-import {
-  TOKEN_DECIMALS,
-  TOKEN_SYMBOL,
-  showTransactionSubmittedToast,
-} from "./utils/chain";
-import {
-  paymentControllerDebugDeposit,
-  paymentControllerDebugFinalizeWithdrawal,
-  paymentControllerGetActiveWithdrawalSession,
-  paymentControllerRequestWithdrawal,
-  useAccountControllerGetBalance,
-} from "./services/queries";
+import { TOKEN_DECIMALS, TOKEN_SYMBOL } from "./utils/chain";
+import { THEME } from "./ui/theme";
+import { ActionButton, StatCard } from "./pages/WalletCards";
+import { useWallet } from "./pages/useWallet";
+import { formatAmount, formatCompactNumber } from "./pages/walletUtils";
 
 const IN_APP_PER_TOKEN = 10;
 const NATIVE_SYMBOL = TOKEN_SYMBOL;
 const NATIVE_DECIMALS = TOKEN_DECIMALS;
-const VAULT_ABI = tap2StacksVaultAbi as Abi;
-const ACCENT = "#2D84EB";
-const SECONDARY = "#4F46E5";
-const DEEP = "#00156E";
-const ACCENT_SOFT = "rgba(45, 132, 235, 0.14)";
-const BORDER = "rgba(255, 255, 255, 0.11)";
-const PANEL_BG =
-  "linear-gradient(148deg, rgba(17, 20, 24, 0.94) 0%, rgba(10, 12, 15, 0.98) 100%)";
-const TILE_BG =
-  "linear-gradient(148deg, rgba(15, 18, 23, 0.94) 0%, rgba(9, 11, 14, 0.99) 100%)";
-const SUBTLE_BG = "rgba(255, 255, 255, 0.04)";
-
-type TabKey = "deposit" | "withdraw";
-
-interface StatCardProps {
-  label: string;
-  value: string;
-  sub?: string;
-}
-
-interface ActionButtonProps {
-  disabled?: boolean;
-  onClick: () => void;
-  pending?: boolean;
-  pendingLabel: string;
-  idleLabel: string;
-}
-
-function StatCard({ label, value, sub }: StatCardProps) {
-  return (
-    <div
-      className="relative overflow-hidden rounded-2xl p-5"
-      style={{
-        background: TILE_BG,
-        border: `1px solid ${BORDER}`,
-        boxShadow: "0 12px 28px rgba(0, 0, 0, 0.44)",
-      }}
-    >
-      <div
-        className="absolute inset-x-0 top-0 h-px"
-        style={{
-          background:
-            "linear-gradient(90deg, transparent 0%, rgba(45, 132, 235, 0.36) 50%, transparent 100%)",
-        }}
-      />
-      <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-white/45">
-        {label}
-      </p>
-      <p className="mt-2 text-[1.65rem] font-bold tracking-[-0.04em] text-white">
-        {value}
-      </p>
-      {sub ? <p className="mt-1.5 text-xs text-white/55">{sub}</p> : null}
-    </div>
-  );
-}
-
-function ActionButton({
-  disabled,
-  onClick,
-  pending,
-  pendingLabel,
-  idleLabel,
-}: ActionButtonProps) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={disabled}
-      className="flex w-full items-center justify-center gap-2 rounded-xl px-5 py-3.5 text-sm font-semibold tracking-wide text-white transition duration-200 hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-45"
-      style={{
-        background: `linear-gradient(135deg, ${ACCENT} 0%, ${SECONDARY} 58%, ${DEEP} 100%)`,
-        boxShadow: "0 10px 22px rgba(45, 132, 235, 0.28)",
-      }}
-    >
-      {pending && <RefreshCw size={15} className="animate-spin" />}
-      {pending ? pendingLabel : idleLabel}
-    </button>
-  );
-}
-
-function formatAmount(
-  value: bigint | undefined,
-  decimals: number,
-  digits = 4,
-  fallback = "—",
-) {
-  if (value === undefined) return fallback;
-
-  return Number(formatUnits(value, decimals)).toLocaleString(undefined, {
-    maximumFractionDigits: digits,
-  });
-}
-
-function formatCompactNumber(value: number, digits = 2) {
-  return value.toLocaleString(undefined, {
-    maximumFractionDigits: digits,
-  });
-}
-
-function safeParseUnits(value: string, decimals: number) {
-  if (!value) return 0n;
-
-  try {
-    return parseUnits(value, decimals);
-  } catch {
-    return 0n;
-  }
-}
-
-function resolveContractAddresses(): ContractAddresses | null {
-  try {
-    return getAddresses();
-  } catch {
-    return null;
-  }
-}
+const ACCENT = THEME.ink;
+const ACCENT_SOFT = THEME.yellow;
+const BORDER = THEME.ink;
+const PANEL_BG = THEME.paper;
+const SUBTLE_BG = THEME.yellow;
 
 export const WalletView: React.FC = () => {
-  const contracts = resolveContractAddresses();
-  const { address, isConnected, chain } = useAccount();
-  const { switchChainAsync, isPending: isPendingSwitch } = useSwitchChain();
-  const [activeTab, setActiveTab] = useState<TabKey>("deposit");
-  const [depositAmountStr, setDepositAmountStr] = useState("");
-  const [withdrawInAppStr, setWithdrawInAppStr] = useState("");
-  const pendingDepositAmountRef = useRef<string | null>(null);
-  const handledDepositTxHashRef = useRef<string | null>(null);
-
-  const { data: nativeBalance, refetch: refetchNativeBalance } = useBalance({
-    address,
-    chainId: baseSepolia.id,
-    query: { enabled: !!address },
-  });
-
-  const { data: offChainBalanceData, refetch: refetchOffChainBalance } =
-    useAccountControllerGetBalance();
-  const offChainBalance = Number(
-    (offChainBalanceData as { free?: string } | undefined)?.free ?? 0,
-  );
-
   const {
-    writeContract: writeDepositTrader,
-    data: depositTxHash,
-    isPending: isDepositingOnChain,
-  } = useWriteContract();
-
-  const {
-    writeContract: writeClaimTrader,
-    data: claimTxHash,
-    isPending: isClaimingTrader,
-  } = useWriteContract();
-  const { isLoading: isWaitingClaim, isSuccess: isClaimSuccess } =
-    useWaitForTransactionReceipt({ hash: claimTxHash });
-
-  const [isSubmittingApi, setIsSubmittingApi] = useState(false);
-
-  const depositTokenAmountRaw = safeParseUnits(
-    depositAmountStr,
-    NATIVE_DECIMALS,
-  );
-  const rawDepositAmount = depositAmountStr
-    ? Number.parseFloat(depositAmountStr)
-    : 0;
-  const isValidDepositAmount =
-    Number.isFinite(rawDepositAmount) &&
-    rawDepositAmount > 0 &&
-    depositTokenAmountRaw > 0n;
-
-  const depositInAppEquivalent = depositAmountStr
-    ? formatCompactNumber(rawDepositAmount * IN_APP_PER_TOKEN, 0)
-    : "0";
-
-  const rawWithdrawInApp = withdrawInAppStr
-    ? Number.parseFloat(withdrawInAppStr)
-    : 0;
-  const isValidWithdrawAmount =
-    Number.isFinite(rawWithdrawInApp) && rawWithdrawInApp > 0;
-  const withdrawTokenFloat = rawWithdrawInApp / IN_APP_PER_TOKEN;
-  const withdrawTokenStr = withdrawTokenFloat.toFixed(18);
-  const withdrawTokenAmountRaw = isValidWithdrawAmount
-    ? parseUnits(withdrawTokenStr, NATIVE_DECIMALS)
-    : 0n;
-  const withdrawTokenEquivalent = isValidWithdrawAmount
-    ? withdrawTokenFloat.toFixed(6)
-    : "0";
-
-  const refreshAll = useCallback(() => {
-    refetchNativeBalance();
-    refetchOffChainBalance();
-  }, [refetchNativeBalance, refetchOffChainBalance]);
-
-  const ensureBaseSepolia = useCallback(async () => {
-    if (!isConnected) {
-      toast.error("Connect wallet to continue.");
-      return false;
-    }
-
-    if (chain?.id === baseSepolia.id) {
-      return true;
-    }
-
-    if (!switchChainAsync) {
-      toast.error(`Switch to ${baseSepolia.name} to continue.`);
-      return false;
-    }
-
-    try {
-      await switchChainAsync({ chainId: baseSepolia.id });
-      return true;
-    } catch (error) {
-      console.error("Network switch failed", error);
-      toast.error(`Please switch to ${baseSepolia.name} before continuing.`);
-      return false;
-    }
-  }, [chain?.id, isConnected, switchChainAsync]);
-
-  useEffect(() => {
-    if (!depositTxHash) return;
-
-    showTransactionSubmittedToast({
-      hash: depositTxHash,
-      title: "Deposit transaction submitted",
-      description: "Your wallet has broadcast the deposit transaction.",
-    });
-  }, [depositTxHash]);
-
-  useEffect(() => {
-    if (!claimTxHash) return;
-
-    showTransactionSubmittedToast({
-      hash: claimTxHash,
-      title: "Withdrawal claim transaction submitted",
-      description:
-        "Your wallet has broadcast the withdrawal claim transaction.",
-    });
-  }, [claimTxHash]);
-
-  useEffect(() => {
-    const handleDepositApi = async () => {
-      if (!depositTxHash || handledDepositTxHashRef.current === depositTxHash) {
-        return;
-      }
-
-      const submittedAmountStr = pendingDepositAmountRef.current;
-      const tokenAmountFloat = submittedAmountStr
-        ? Number.parseFloat(submittedAmountStr)
-        : NaN;
-
-      if (!Number.isFinite(tokenAmountFloat) || tokenAmountFloat <= 0) {
-        pendingDepositAmountRef.current = null;
-        handledDepositTxHashRef.current = depositTxHash;
-        return;
-      }
-
-      handledDepositTxHashRef.current = depositTxHash;
-
-      try {
-        setIsSubmittingApi(true);
-
-        const apiAmount = Math.floor(
-          tokenAmountFloat * IN_APP_PER_TOKEN,
-        ).toString();
-
-        const token = localStorage.getItem("token");
-
-        await paymentControllerDebugDeposit(
-          {
-            amount: apiAmount,
-            txHash: depositTxHash,
-            logIndex: 0,
-          },
-          {
-            headers: {
-              Authorization: `Bearer ${token}`,
-            },
-          },
-        );
-
-        refreshAll();
-        setDepositAmountStr("");
-        pendingDepositAmountRef.current = null;
-      } catch (error) {
-        console.error("API error", error);
-        toast.error("Transaction sent but API call failed.");
-      } finally {
-        setIsSubmittingApi(false);
-      }
-    };
-
-    handleDepositApi();
-  }, [depositTxHash, refreshAll]);
-
-  useEffect(() => {
-    if (!isClaimSuccess || !claimTxHash) return;
-
-    const handleFinalizeWithdrawal = async () => {
-      try {
-        setIsSubmittingApi(true);
-
-        const token = localStorage.getItem("token");
-        const authHeader = { Authorization: `Bearer ${token}` };
-
-        const sessionResponse =
-          await paymentControllerGetActiveWithdrawalSession({
-            headers: authHeader,
-          });
-
-        const sessionData = sessionResponse as unknown as
-          | { sessionId: string }
-          | null
-          | undefined;
-
-        if (!sessionData?.sessionId) {
-          toast.error("Could not retrieve withdrawal session ID.");
-          return;
-        }
-
-        await paymentControllerDebugFinalizeWithdrawal(
-          {
-            sessionId: sessionData.sessionId,
-            txHash: claimTxHash,
-            logIndex: 0,
-          },
-          {
-            headers: {
-              ...authHeader,
-              "Content-Type": "application/json",
-            },
-          },
-        );
-
-        toast.success("Withdrawal finalized successfully!");
-        refreshAll();
-        setWithdrawInAppStr("");
-      } catch (error) {
-        console.error("Finalize withdrawal error", error);
-        toast.error("On-chain claim sent but finalization failed.");
-      } finally {
-        setIsSubmittingApi(false);
-      }
-    };
-
-    handleFinalizeWithdrawal();
-  }, [claimTxHash, isClaimSuccess, refreshAll]);
-
-  const handleDeposit = async () => {
-    if (!contracts) {
-      toast.error("Contracts not deployed yet");
-      return;
-    }
-
-    const onBaseSepolia = await ensureBaseSepolia();
-    if (!onBaseSepolia) return;
-
-    if (!depositAmountStr || !isValidDepositAmount) {
-      toast.error("Enter a valid amount");
-      return;
-    }
-
-    if ((nativeBalance?.value ?? 0n) < depositTokenAmountRaw) {
-      toast.error("Insufficient balance");
-      return;
-    }
-
-    pendingDepositAmountRef.current = depositAmountStr;
-
-    writeDepositTrader({
-      address: contracts.vault,
-      abi: VAULT_ABI,
-      functionName: "depositTrader",
-      value: depositTokenAmountRaw,
-    });
-  };
-
-  const handleWithdraw = async () => {
-    if (!contracts) {
-      toast.error("Contracts not deployed yet");
-      return;
-    }
-
-    const onBaseSepolia = await ensureBaseSepolia();
-    if (!onBaseSepolia) return;
-
-    if (!withdrawInAppStr || !isValidWithdrawAmount) {
-      toast.error("Enter a valid in-app balance amount");
-      return;
-    }
-
-    const token = localStorage.getItem("token");
-    const authHeader = { Authorization: `Bearer ${token}` };
-
-    try {
-      setIsSubmittingApi(true);
-
-      await paymentControllerRequestWithdrawal(
-        { amount: withdrawInAppStr },
-        { headers: { ...authHeader, "Content-Type": "application/json" } },
-      );
-
-      toast.success("Withdrawal request submitted. Processing on-chain...");
-    } catch (error) {
-      console.error("Request withdrawal error", error);
-      toast.error("Failed to initiate withdrawal request.");
-      setIsSubmittingApi(false);
-      return;
-    } finally {
-      setIsSubmittingApi(false);
-    }
-
-    writeClaimTrader({
-      address: contracts.vault,
-      abi: VAULT_ABI,
-      functionName: "claimTrader",
-      args: [withdrawTokenAmountRaw],
-    });
-  };
-
-  const handleMaxDeposit = () => {
-    if (!nativeBalance?.value) return;
-
-    setDepositAmountStr(formatUnits(nativeBalance.value, NATIVE_DECIMALS));
-  };
-
-  const handleMaxWithdraw = () => {
-    if (offChainBalance <= 0) return;
-
-    setWithdrawInAppStr(offChainBalance.toString());
-  };
-
-  const chainMismatch = isConnected && chain?.id !== baseSepolia.id;
-  const isInsufficientDeposit =
-    depositTokenAmountRaw > (nativeBalance?.value ?? 0n);
-  const isInsufficientWithdraw = rawWithdrawInApp > offChainBalance;
-
-  const depositPending = isDepositingOnChain || isSubmittingApi;
-  const withdrawPending = isSubmittingApi || isClaimingTrader || isWaitingClaim;
-  const isDepositFlow = activeTab === "deposit";
-  const fromAmount = isDepositFlow ? depositAmountStr : withdrawInAppStr;
-  const toAmount = isDepositFlow
-    ? depositInAppEquivalent
-    : withdrawTokenEquivalent;
-  const fromAsset = isDepositFlow ? NATIVE_SYMBOL : "APP";
-  const toAsset = isDepositFlow ? "APP" : NATIVE_SYMBOL;
-  const fromAssetBalance = isDepositFlow
-    ? `${formatAmount(nativeBalance?.value, NATIVE_DECIMALS)} ${NATIVE_SYMBOL}`
-    : `${formatCompactNumber(offChainBalance, 0)} APP`;
-  const toAssetBalance = isDepositFlow
-    ? `${formatCompactNumber(offChainBalance, 0)} APP`
-    : `${formatAmount(nativeBalance?.value, NATIVE_DECIMALS)} ${NATIVE_SYMBOL}`;
-
-  const activeRailLabel = useMemo(
-    () =>
-      activeTab === "deposit" ? "Chain → App balance" : "App balance → Chain",
-    [activeTab],
-  );
-
-  const handleToggleDirection = () => {
-    setActiveTab((current) => (current === "deposit" ? "withdraw" : "deposit"));
-    setDepositAmountStr("");
-    setWithdrawInAppStr("");
-  };
-
-  const shortAddress = address
-    ? `${address.slice(0, 6)}...${address.slice(-4)}`
-    : "Not connected";
-
+    contracts, isConnected, chain, switchChainAsync,
+    isPendingSwitch, activeTab, setDepositAmountStr, setWithdrawInAppStr,
+    nativeBalance, offChainBalance, isValidDepositAmount, isValidWithdrawAmount,
+    refreshAll, handleDeposit, handleWithdraw, handleMaxDeposit,
+    handleMaxWithdraw, chainMismatch, isInsufficientDeposit, isInsufficientWithdraw,
+    depositPending, withdrawPending, isDepositFlow, fromAmount,
+    toAmount, fromAsset, toAsset, fromAssetBalance,
+    toAssetBalance, activeRailLabel, handleToggleDirection, shortAddress,
+  } = useWallet();
   return (
     <div className="relative mx-auto flex w-full max-w-7xl flex-1 flex-col gap-4 px-4 py-5 sm:px-6 lg:px-10 lg:py-7">
-      <div
-        className="absolute left-[18%] top-5 h-[260px] w-[260px] rounded-full blur-[130px]"
-        style={{
-          background:
-            "radial-gradient(circle, rgba(132,185,255,0.13) 0%, transparent 70%)",
-        }}
-      />
-      <div
-        className="absolute right-[11%] top-[26%] h-[220px] w-[220px] rounded-full blur-[110px]"
-        style={{
-          background:
-            "radial-gradient(circle, rgba(45,132,235,0.1) 0%, transparent 72%)",
-        }}
-      />
 
       <section className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
           <div
             className="flex h-10 w-10 items-center justify-center rounded-full border"
             style={{
-              borderColor: "rgba(45,132,235,0.3)",
+              borderColor: THEME.ink,
               background: ACCENT_SOFT,
             }}
           >
             <Droplets size={18} style={{ color: ACCENT }} />
           </div>
           <div>
-            <h1 className="text-[1.72rem] font-bold tracking-[-0.03em] text-white">
+            <h1 className="text-[1.72rem] font-bold tracking-[-0.03em] text-ink">
               Wallet Liquidity
             </h1>
-            <p className="text-xs text-white/45">
+            <p className="text-xs text-ink/70">
               Deposit and withdraw between wallet and in-app balance
             </p>
           </div>
         </div>
 
-        <div className="flex items-center gap-2 text-xs text-white/55">
+        <div className="flex items-center gap-2 text-xs text-ink/70">
           <span
             className="rounded-md border px-2.5 py-1.5"
             style={{ borderColor: BORDER, background: SUBTLE_BG }}
@@ -555,7 +61,7 @@ export const WalletView: React.FC = () => {
           <button
             type="button"
             onClick={refreshAll}
-            className="inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-white/70 transition hover:text-white"
+            className="inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-ink transition hover:text-ink"
             style={{ borderColor: BORDER, background: SUBTLE_BG }}
           >
             <RefreshCw size={12} />
@@ -585,14 +91,14 @@ export const WalletView: React.FC = () => {
       <section className="grid gap-4 lg:grid-cols-[1fr_1fr]">
         <div className="space-y-4">
           <div
-            className="rounded-2xl p-5"
+            className="rounded-xl p-5"
             style={{
               background: PANEL_BG,
-              border: `1px solid ${BORDER}`,
-              boxShadow: "0 18px 36px rgba(0, 0, 0, 0.45)",
+              border: `1.5px solid ${BORDER}`,
+              boxShadow: `0 2px 0 ${THEME.ink}`,
             }}
           >
-            <h3 className="text-lg font-semibold text-white">
+            <h3 className="text-lg font-semibold text-ink">
               Wallet Overview
             </h3>
             <div className="mt-4 space-y-2">
@@ -617,16 +123,16 @@ export const WalletView: React.FC = () => {
                   className="flex items-center justify-between gap-3 rounded-lg border px-3 py-2"
                   style={{ borderColor: BORDER, background: SUBTLE_BG }}
                 >
-                  <span className="inline-flex items-center gap-2 text-xs text-white/62">
+                  <span className="inline-flex items-center gap-2 text-xs text-ink/70">
                     <Icon size={14} style={{ color: ACCENT }} />
                     {label}
                   </span>
-                  <span className="text-xs text-white/80">{value}</span>
+                  <span className="text-xs text-ink">{value}</span>
                 </div>
               ))}
             </div>
             {chainMismatch ? (
-              <p className="mt-3 text-xs text-[#ff8ca0]">
+              <p className="mt-3 text-xs text-loss">
                 Wrong network. Please switch to {baseSepolia.name}.
               </p>
             ) : null}
@@ -634,24 +140,24 @@ export const WalletView: React.FC = () => {
         </div>
 
         <div
-          className="h-fit rounded-2xl p-5 lg:sticky lg:top-5"
+          className="h-fit rounded-xl p-5 lg:sticky lg:top-5"
           style={{
             background: PANEL_BG,
-            border: `1px solid ${BORDER}`,
-            boxShadow: "0 18px 38px rgba(0, 0, 0, 0.5)",
+            border: `1.5px solid ${BORDER}`,
+            boxShadow: `0 2px 0 ${THEME.ink}`,
           }}
         >
           <div className="flex items-center justify-between gap-3">
             <div>
-              <p className="text-xs uppercase tracking-[0.2em] text-white/45">
+              <p className="text-xs uppercase tracking-[0.2em] text-ink">
                 Swap
               </p>
-              <h2 className="mt-1 text-lg font-semibold text-white">
+              <h2 className="mt-1 text-lg font-semibold text-ink">
                 {activeRailLabel}
               </h2>
             </div>
             <div
-              className="rounded-md border px-2 py-1 text-xs text-white/70"
+              className="rounded-md border px-2 py-1 text-xs text-ink"
               style={{ borderColor: BORDER, background: SUBTLE_BG }}
             >
               {isConnected ? "Connected" : "Offline"}
@@ -663,13 +169,13 @@ export const WalletView: React.FC = () => {
               className="mt-4 rounded-xl border p-6 text-center"
               style={{
                 borderColor: BORDER,
-                background: "rgba(255,255,255,0.02)",
+                background: THEME.paper,
               }}
             >
-              <p className="text-sm font-semibold text-white">
+              <p className="text-sm font-semibold text-ink">
                 Contracts not deployed yet
               </p>
-              <p className="mt-1.5 text-xs text-white/55">
+              <p className="mt-1.5 text-xs text-ink/70">
                 On-chain deposit and withdrawal forms will appear once contract
                 addresses are configured. Use the dev top-up button in the
                 header for local testing.
@@ -682,17 +188,17 @@ export const WalletView: React.FC = () => {
                   className="rounded-xl border p-3"
                   style={{
                     borderColor: BORDER,
-                    background: "rgba(255,255,255,0.02)",
+                    background: THEME.paper,
                   }}
                 >
-                  <div className="flex items-center justify-between text-xs text-white/55">
+                  <div className="flex items-center justify-between text-xs text-ink/70">
                     <span>From</span>
                     <button
                       type="button"
                       onClick={
                         isDepositFlow ? handleMaxDeposit : handleMaxWithdraw
                       }
-                      className="rounded-md border px-2 py-1 text-[11px] font-medium text-white/75 transition hover:text-white"
+                      className="rounded-md border px-2 py-1 text-[11px] font-medium text-ink transition hover:text-ink"
                       style={{ borderColor: BORDER, background: SUBTLE_BG }}
                     >
                       Max
@@ -710,7 +216,7 @@ export const WalletView: React.FC = () => {
                           : setWithdrawInAppStr(event.target.value)
                       }
                       placeholder="0"
-                      className="min-w-0 flex-1 bg-transparent text-left text-3xl font-semibold tracking-tight text-white outline-none placeholder:text-white/25"
+                      className="min-w-0 flex-1 bg-transparent text-left text-3xl font-semibold tracking-tight text-ink outline-none placeholder:text-ink"
                     />
                     <span
                       className="inline-flex items-center gap-1 rounded-md border px-2 py-1 text-xs font-semibold"
@@ -724,7 +230,7 @@ export const WalletView: React.FC = () => {
                       {fromAsset}
                     </span>
                   </div>
-                  <p className="mt-2 text-xs text-white/55">
+                  <p className="mt-2 text-xs text-ink/70">
                     Balance: {fromAssetBalance}
                   </p>
                 </div>
@@ -733,7 +239,7 @@ export const WalletView: React.FC = () => {
                   <button
                     type="button"
                     onClick={handleToggleDirection}
-                    className="inline-flex h-10 w-10 items-center justify-center rounded-xl border text-white/70 transition hover:text-white"
+                    className="inline-flex h-10 w-10 items-center justify-center rounded-xl border text-ink transition hover:text-ink"
                     style={{ borderColor: BORDER, background: SUBTLE_BG }}
                     aria-label="Switch swap direction"
                   >
@@ -745,14 +251,14 @@ export const WalletView: React.FC = () => {
                   className="rounded-xl border p-3"
                   style={{
                     borderColor: BORDER,
-                    background: "rgba(255,255,255,0.02)",
+                    background: THEME.paper,
                   }}
                 >
-                  <div className="flex items-center justify-between text-xs text-white/55">
+                  <div className="flex items-center justify-between text-xs text-ink/70">
                     <span>To (Estimated)</span>
                   </div>
                   <div className="mt-3 flex items-center justify-between gap-2">
-                    <p className="text-3xl font-semibold tracking-tight text-white">
+                    <p className="text-3xl font-semibold tracking-tight text-ink">
                       {toAmount}
                     </p>
                     <span
@@ -767,19 +273,19 @@ export const WalletView: React.FC = () => {
                       {toAsset}
                     </span>
                   </div>
-                  <p className="mt-2 text-xs text-white/55">
+                  <p className="mt-2 text-xs text-ink/70">
                     Balance: {toAssetBalance}
                   </p>
                 </div>
               </div>
 
               {activeTab === "deposit" && isInsufficientDeposit ? (
-                <p className="mt-3 text-right text-xs text-[#ff8ca0]">
+                <p className="mt-3 text-right text-xs text-loss">
                   Deposit amount exceeds connected wallet balance.
                 </p>
               ) : null}
               {activeTab === "withdraw" && isInsufficientWithdraw ? (
-                <p className="mt-3 text-right text-xs text-[#ff8ca0]">
+                <p className="mt-3 text-right text-xs text-loss">
                   Requested amount exceeds your in-app balance.
                 </p>
               ) : null}

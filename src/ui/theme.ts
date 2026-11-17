@@ -8,6 +8,7 @@ export const THEME = {
   coinLight: "#FFE58A",
   coinDark: "#E2B23C",
   win: "#2F6B34",
+  winOnInk: "#83D98B",
   loss: "#9A3B2E",
   font: "'JetBrains Mono', ui-monospace, Menlo, monospace",
 } as const;

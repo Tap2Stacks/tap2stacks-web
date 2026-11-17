@@ -1,3 +1,4 @@
+import { requestReconfirmation, useComplianceStore } from "../compliance/store";
 import React, { useEffect, useRef, useState } from "react";
 import { ChevronDown } from "lucide-react";
 import toast from "react-hot-toast";
@@ -86,6 +87,7 @@ export const Header: React.FC<HeaderProps> = ({ bellSlot }) => {
   const { switchChain, isPending: isPendingSwitch } = useSwitchChain();
 
   const token = useAuthToken();
+  const attested = useComplianceStore((state) => state.attested);
   const [walletMenuOpen, setWalletMenuOpen] = useState(false);
   const [isFunding, setIsFunding] = useState(false);
 
@@ -144,7 +146,7 @@ export const Header: React.FC<HeaderProps> = ({ bellSlot }) => {
   };
 
   const handleLogin = async () => {
-    if (!isConnected || !address || isLoggingIn.current) return;
+    if (!isConnected || !address || !attested || isLoggingIn.current) return;
 
     const storedToken = localStorage.getItem("token");
     const storedAddress = localStorage.getItem("wallet-address");
@@ -162,11 +164,31 @@ export const Header: React.FC<HeaderProps> = ({ bellSlot }) => {
 
       const signature = await signMessageAsync({ message: challenge });
 
-      const loginRes = await authControllerLogin({
+      const login = () => authControllerLogin({
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ address, signature }),
+        body: JSON.stringify({ address, signature, age18: true, notUS: true }),
       });
+      let loginRes;
+      try {
+        loginRes = await login();
+      } catch (error) {
+        const response = (
+          error as { response?: { status?: number; data?: { error?: string } } }
+        )?.response;
+        if (response?.status === 451) {
+          useComplianceStore.getState().block();
+          throw error;
+        }
+        if (
+          response?.status !== 403 ||
+          response.data?.error !== "ATTESTATION_REQUIRED"
+        ) {
+          throw error;
+        }
+        await requestReconfirmation();
+        loginRes = await login();
+      }
 
       const accessToken = (loginRes as unknown as { accessToken: string })
         .accessToken;
@@ -175,6 +197,11 @@ export const Header: React.FC<HeaderProps> = ({ bellSlot }) => {
       setAuthToken(accessToken);
       refetchBalance();
     } catch (error) {
+      const status = (error as { response?: { status?: number } })?.response
+        ?.status;
+      if (status === 451) {
+        useComplianceStore.getState().block();
+      }
       console.error("Login failed:", error);
     } finally {
       isLoggingIn.current = false;
@@ -184,7 +211,7 @@ export const Header: React.FC<HeaderProps> = ({ bellSlot }) => {
   useEffect(() => {
     handleLogin();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isConnected, address]);
+  }, [isConnected, address, attested]);
 
   const handleDisconnect = () => {
     disconnect();

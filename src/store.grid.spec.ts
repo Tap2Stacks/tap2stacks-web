@@ -56,8 +56,6 @@ vi.mock("./services/queries", () => ({
   paymentControllerRequestWithdrawal: vi.fn(),
 }));
 
-import { TradingGrid } from "./TradingGrid";
-import { TradingView } from "./TradingView";
 import { WalletView } from "./WalletView";
 import { Header } from "./shell/Header";
 
@@ -370,123 +368,6 @@ describe("stock grid UI components", () => {
     cleanup();
     vi.unstubAllEnvs();
     vi.restoreAllMocks();
-  });
-
-  it("TradingView switches tickers, updates label, and offers [1,5,10,25] stake chips", () => {
-    const qc = new QueryClient();
-    render(
-      createElement(
-        QueryClientProvider,
-        { client: qc },
-        createElement(TradingView),
-      ),
-    );
-
-    expect(
-      screen.getAllByText("NVDA · Hyperliquid mark price").length,
-    ).toBeGreaterThan(0);
-    expect(screen.getByRole("button", { name: "$1" })).toBeTruthy();
-    expect(screen.getByRole("button", { name: "$5" })).toBeTruthy();
-    expect(screen.getByRole("button", { name: "$10" })).toBeTruthy();
-    expect(screen.getByRole("button", { name: "$25" })).toBeTruthy();
-    expect(screen.queryByRole("button", { name: "$50" })).toBeNull();
-    expect(screen.queryByRole("button", { name: "$100" })).toBeNull();
-
-    fireEvent.click(screen.getByRole("button", { name: "TSLA" }));
-    expect(useGameStore.getState().ticker).toBe("TSLA");
-    expect(
-      screen.getAllByText("TSLA · Hyperliquid mark price").length,
-    ).toBeGreaterThan(0);
-  });
-
-  it("TradingGrid shows Price feed paused overlay when stale and disables taps, while rendering Refunded and Miss states", () => {
-    const now = Date.now();
-    const activeCell = makeCell({
-      ticker: "NVDA",
-      gridTs: now,
-      startTs: now + 10_000,
-      endTs: now + 15_000,
-      lowerPrice: "157.50",
-      upperPrice: "157.53",
-      rewardRate: "2.5000",
-    });
-    const voidedCell = makeCell({
-      ticker: "NVDA",
-      gridTs: now,
-      startTs: now - 10_000,
-      endTs: now - 5_000,
-      lowerPrice: "157.53",
-      upperPrice: "157.56",
-      rewardRate: "3.0000",
-    });
-    const missedCell = makeCell({
-      ticker: "NVDA",
-      gridTs: now,
-      startTs: now - 10_000,
-      endTs: now - 5_000,
-      lowerPrice: "157.47",
-      upperPrice: "157.50",
-      rewardRate: "2.2000",
-    });
-
-    useGameStore.getState().updateGrid({
-      ticker: "NVDA",
-      gridTs: now,
-      priceStep: "0.03",
-      cells: [activeCell, voidedCell, missedCell],
-    });
-    const voidId = `NVDA:${voidedCell.startTs}:${voidedCell.endTs}:${voidedCell.lowerPrice}:${voidedCell.upperPrice}`;
-    const missId = `NVDA:${missedCell.startTs}:${missedCell.endTs}:${missedCell.lowerPrice}:${missedCell.upperPrice}`;
-    useGameStore.setState({
-      bets: { [voidId]: 5, [missId]: 5 },
-      socket: { emit: mockEmit } as never,
-      wssKey: "00112233",
-    });
-    useGameStore.getState().updateOrder({
-      ticker: "NVDA",
-      startTs: voidedCell.startTs,
-      endTs: voidedCell.endTs,
-      lowerPrice: voidedCell.lowerPrice,
-      upperPrice: voidedCell.upperPrice,
-      status: "VOIDED",
-    });
-    useGameStore.getState().updateOrder({
-      ticker: "NVDA",
-      startTs: missedCell.startTs,
-      endTs: missedCell.endTs,
-      lowerPrice: missedCell.lowerPrice,
-      upperPrice: missedCell.upperPrice,
-      status: "SETTLED",
-      settledWin: false,
-    });
-
-    localStorage.setItem("token", "test-jwt");
-
-    const { rerender } = render(createElement(TradingGrid));
-    expect(screen.getByText("Refunded")).toBeTruthy();
-    expect(screen.getByText("Miss")).toBeTruthy();
-    expect(screen.queryByTestId("stale-feed-overlay")).toBeNull();
-
-    // Mark NVDA stale: overlay appears and clicking cell does not emit place_bet
-    useGameStore.getState().setFeedStale("NVDA", true);
-    rerender(createElement(TradingGrid));
-    expect(screen.getByTestId("stale-feed-overlay")).toBeTruthy();
-    expect(screen.getByText("Price feed paused")).toBeTruthy();
-
-    fireEvent.click(screen.getByText("2.50x"));
-    expect(mockEmit).not.toHaveBeenCalled();
-
-    // Recover NVDA feed: click emits place_bet with marketId: "NVDA"
-    useGameStore.getState().setFeedStale("NVDA", false);
-    rerender(createElement(TradingGrid));
-    fireEvent.click(screen.getByText("2.50x"));
-    expect(mockEmit).toHaveBeenCalledWith(
-      "place_bet",
-      expect.objectContaining({
-        marketId: "NVDA",
-        amount: "5",
-      }),
-    );
   });
 
   it("WalletView does not crash when VITE_* contract addresses are missing and shows Contracts not deployed yet", () => {

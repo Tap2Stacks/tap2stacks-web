@@ -12,3 +12,14 @@ it('store snapshots replace obsolete stacks and update coins immutably through a
  store.getState().expirePendingCoins(5001);expect(store.getState().stacks.e.coins[0].status).toBe('rejected');
  store.getState().updateOrder({cellId:'d',orderId:'next',status:'VOIDED'});expect(store.getState().stacks.d.coins[0].status).toBe('void');
 });
+it('new stack wins never enter the legacy delayed-balance path',()=>{
+ const store=useGameStore;store.setState({stacks:{},balance:100,serverBalance:100,pendingWins:{},cells:[]});
+ store.getState().updateOrder({cellId:'c',ticker:'NVDA',orderId:'o',status:'OPEN',amount:5,rewardRate:'4'});
+ store.getState().updateOrder({cellId:'c',ticker:'NVDA',orderId:'o',status:'SETTLED',settledWin:true,amount:5,rewardRate:'4'});
+ expect(store.getState().stacks.c.coins[0].status).toBe('won');expect(store.getState().balance).toBe(100);expect(store.getState().pendingWins).toEqual({});
+});
+it('settlement first after reconnect cannot create an uncleared legacy deduction',()=>{
+ useGameStore.setState({stacks:{},balance:100,serverBalance:100,pendingWins:{},cells:[]});
+ useGameStore.getState().updateOrder({cellId:'c',ticker:'NVDA',orderId:'missed-open',status:'SETTLED',settledWin:true,amount:5,rewardRate:'4'});
+ expect(useGameStore.getState().stacks.c.coins[0].status).toBe('won');expect(useGameStore.getState().balance).toBe(100);expect(useGameStore.getState().pendingWins).toEqual({});
+});

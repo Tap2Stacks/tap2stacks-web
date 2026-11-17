@@ -1,8 +1,8 @@
 import { useGameStore, type CellData } from '../store';
-import { drawBoard, type BoardScene } from './draw';
+import { bounds, drawBoard, type BoardScene } from './draw';
 import { createChartClock } from './clock';
 import { createSmoothValue } from './smooth';
-import { priceToY, timeToX, type BoardViewport } from './layout';
+import { cellRect, priceToY, timeToX, type BoardViewport } from './layout';
 import { seriesFor, shouldRedraw } from './priceSeries';
 type State = ReturnType<typeof useGameStore.getState>;
 export class BoardRuntime {
@@ -31,6 +31,18 @@ export class BoardRuntime {
         document.addEventListener('visibilitychange', this.visibility);
         if (!document.hidden)
             this.frame = requestAnimationFrame(this.render);
+    }
+    cellCenter(cellId: string): {x: number; y: number} | null {
+        const state = useGameStore.getState();
+        const cell = state.cells.find(c => c.id === cellId && c.original.ticker === state.ticker);
+        const v = this.viewport;
+        if (!cell || !v) return null;
+        const rect = cellRect(v, bounds(cell));
+        const x = rect.x + rect.w / 2;
+        const y = rect.y + rect.h / 2;
+        if (x < 0 || x > v.width || y < 0 || y > v.height) return null;
+        const client = this.el.getBoundingClientRect();
+        return {x: client.left + x * client.width / v.width, y: client.top + y * client.height / v.height};
     }
     dispose() { this.observer.disconnect(); cancelAnimationFrame(this.frame); document.removeEventListener('visibilitychange', this.visibility); }
     private resize = () => {
@@ -90,7 +102,7 @@ export class BoardRuntime {
         if (target > 0)
             line.push({ x: v.width * .3, y: priceToY(v, live) });
         const cells = state.cells.filter(c => c.original.ticker === state.ticker);
-        drawBoard(this.ctx, { viewport: v, cells, line, livePrice: live, stacks: state.stacks, flash: this.flash(), animationNowMs: Date.now(), reducedMotion: !!this.reduced?.matches });
+        drawBoard(this.ctx, { viewport: v, cells, line, livePrice: live, stacks: state.stacks, flash: this.flash() ? {...this.flash()!, untilMs: this.flash()!.untilMs + state.serverTimeOffset} : undefined, animationNowMs: Date.now(), reducedMotion: !!this.reduced?.matches });
         this.previous = next;
         this.dirty = false;
         this.lastCells = state.cells;

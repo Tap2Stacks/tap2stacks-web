@@ -19,6 +19,7 @@ import {
   useAccountControllerGetBalance,
 } from "../services/queries";
 import { useGameStore } from "../store";
+import { useBalanceDisplay } from "./useBalanceDisplay";
 import { THEME } from "../ui/theme";
 import { getExplorerAddressUrl } from "../utils/chain";
 
@@ -74,6 +75,7 @@ export interface HeaderProps {
 
 export const Header: React.FC<HeaderProps> = ({ bellSlot }) => {
   const balance = useGameStore((state) => state.balance);
+  const displayedBalance = useBalanceDisplay(balance);
   const updateBalance = useGameStore((state) => state.updateBalance);
 
   const location = useLocation();
@@ -248,7 +250,7 @@ export const Header: React.FC<HeaderProps> = ({ bellSlot }) => {
               border: `1.5px solid ${THEME.ink}`,
             }}
           >
-            ${balance.toFixed(2)}
+            ${displayedBalance.toFixed(2)}
           </div>
 
           {!isConnected ? (

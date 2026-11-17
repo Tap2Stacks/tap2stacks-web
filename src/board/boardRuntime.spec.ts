@@ -22,3 +22,12 @@ it('keeps historical x coordinates continuous as the six-column quote horizon ro
  const runtime=new BoardRuntime(el,recordingContext().ctx,()=>undefined);
  try{frame(0);const before=timeToX(runtime.viewport!,5000);wall=15000;useGameStore.setState({cells:[testCell({timeWindowEnd:50000})]});frame(1);expect(Math.abs(timeToX(runtime.viewport!,5000)-before)).toBeLessThan(.1);expect(timeToX(runtime.viewport!,50000)).toBeCloseTo(1000);}finally{runtime.dispose();}
 });
+it('cellCenter returns client coordinates only for visible cells of the current ticker',()=>{
+ let frame:FrameRequestCallback=()=>{};
+ vi.stubGlobal('requestAnimationFrame',(cb:FrameRequestCallback)=>{frame=cb;return 1;});vi.stubGlobal('cancelAnimationFrame',()=>{});vi.stubGlobal('ResizeObserver',class{observe(){}disconnect(){}});vi.spyOn(document,'hidden','get').mockReturnValue(false);vi.spyOn(Date,'now').mockReturnValue(10000);
+ const el=document.createElement('canvas');vi.spyOn(el,'getBoundingClientRect').mockReturnValue({left:40,top:80,width:1000,height:600} as DOMRect);
+ const visible=testCell();const other=testCell({id:'other',original:{...visible.original,ticker:'TSLA'}});const hidden=testCell({id:'hidden',original:{...visible.original,lowerPrice:'900',upperPrice:'901'}});
+ useGameStore.setState({ticker:'NVDA',currentPrice:155,cells:[visible,other,hidden],stacks:{},serverTimeOffset:0});
+ const runtime=new BoardRuntime(el,recordingContext().ctx,()=>undefined);
+ try{expect(runtime.cellCenter(visible.id)).toBeNull();frame(0);expect(runtime.cellCenter(visible.id)?.x).toBeCloseTo(490);expect(runtime.cellCenter(visible.id)?.y).toBeCloseTo(365);expect(runtime.cellCenter(other.id)).toBeNull();expect(runtime.cellCenter(hidden.id)).toBeNull();expect(runtime.cellCenter('missing')).toBeNull();}finally{runtime.dispose();}
+});

@@ -2,6 +2,14 @@ import React, { useEffect, useState } from "react";
 import { Outlet } from "react-router-dom";
 import { useRealtime } from "../realtime/useRealtime";
 import { THEME } from "../ui/theme";
+import { useAccount } from "wagmi";
+import { RunningBar } from "../feed/RunningBar";
+import { FxCanvas } from "../fx/FxCanvas";
+import { WinBanner } from "../fx/WinBanner";
+import { useWinWatcher } from "../realtime/winWatcher";
+import { boardCellCenter } from "../board/centers";
+import { useGameStore } from "../store";
+import { BellPill } from "../pages/BellPill";
 import { Header } from "./Header";
 
 const MIN_DESKTOP_WIDTH = 1024;
@@ -13,6 +21,9 @@ export interface LayoutProps {
 
 export const Layout: React.FC<LayoutProps> = ({ runningBar, bellSlot }) => {
   useRealtime();
+  useWinWatcher();
+  const { address } = useAccount();
+  const ticker = useGameStore(state => state.ticker);
 
   const [isSmallScreen, setIsSmallScreen] = useState(() =>
     typeof window !== "undefined" ? window.innerWidth < MIN_DESKTOP_WIDTH : false,
@@ -51,12 +62,14 @@ export const Layout: React.FC<LayoutProps> = ({ runningBar, bellSlot }) => {
       ) : null}
 
       <div className="flex min-h-0 min-w-[1024px] flex-1 flex-col">
-        {runningBar ? <div className="shrink-0">{runningBar}</div> : null}
-        <Header bellSlot={bellSlot} />
+        <div className="h-8 shrink-0 overflow-hidden">{runningBar ?? <RunningBar ownAddress={address ?? null} />}</div>
+        <Header bellSlot={bellSlot ?? <BellPill />} />
         <main className="flex min-h-0 flex-1 flex-col overflow-auto">
           <Outlet />
         </main>
       </div>
+      <FxCanvas viewingTicker={ticker} cellCenter={boardCellCenter} />
+      <WinBanner />
     </div>
   );
 };

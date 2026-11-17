@@ -99,6 +99,7 @@ export function useRealtime(): void {
         socket.on("feed_health", (data) => {
           if (data?.ticker) {
             setFeedStale(data.ticker, Boolean(data.stale));
+            if (data.prevDayPx !== undefined) useGameStore.getState().setPrevDayPx(data.ticker, data.prevDayPx);
           }
         });
 

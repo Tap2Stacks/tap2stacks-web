@@ -4,7 +4,7 @@ import {
   Route,
   Routes,
 } from "react-router-dom";
-import { TradingView } from "./TradingView";
+import { TradePage } from "./pages/TradePage";
 import { HistoryView } from "./HistoryView";
 import { WalletView } from "./WalletView";
 import { ProofsView } from "./ProofsView";
@@ -19,7 +19,7 @@ function App() {
       <Routes>
         <Route element={<Layout />}>
           <Route path="/" element={<Navigate to="/trade" replace />} />
-          <Route path="/trade" element={<TradingView />} />
+          <Route path="/trade" element={<TradePage />} />
           <Route path="/history" element={<HistoryView />} />
           <Route path="/wallet" element={<WalletView />} />
           <Route path="/proofs" element={<ProofsView />} />

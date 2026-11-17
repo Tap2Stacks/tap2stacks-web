@@ -1,11 +1,10 @@
 import { useEffect, useLayoutEffect, useRef } from 'react';
 import { useGameStore, type CellData } from '../store';
-import { fetchRecentPrices } from '../api/prices';
-import { onPrice } from '../realtime/bus';
 import { bounds, type BoardScene } from './draw';
 import { hitTestCell, isLocked } from './layout';
-import { seriesFor } from './priceSeries';
+import { usePriceSeries } from './usePriceSeries';
 import { useStackRecovery } from './useStackRecovery';
+import { registerBoardCenters } from './centers';
 import { BoardRuntime } from './boardRuntime';
 export function BoardCanvas({ onTapCell, flash }: {
     onTapCell: (cell: CellData) => void;
@@ -16,16 +15,15 @@ export function BoardCanvas({ onTapCell, flash }: {
     const flashRef = useRef(flash);
     useLayoutEffect(() => { flashRef.current = flash; }, [flash]);
     const ticker = useGameStore(s => s.ticker);
-    useEffect(() => { let alive = true; void fetchRecentPrices(ticker).then(data => { if (alive)
-        seriesFor(ticker).seed(data.points); }); return () => { alive = false; }; }, [ticker]);
-    useEffect(() => onPrice((t, ts, price) => seriesFor(t).push(ts, price)), []);
+    usePriceSeries(ticker);
     useEffect(() => {
         const el = canvas.current!, ctx = el.getContext('2d');
         if (!ctx)
             return;
         const board = new BoardRuntime(el, ctx, () => flashRef.current);
         runtime.current = board;
-        return () => { board.dispose(); runtime.current = null; };
+        const unregister = registerBoardCenters(id => board.cellCenter(id));
+        return () => { unregister(); board.dispose(); runtime.current = null; };
     }, []);
     return <canvas ref={canvas} aria-label="Live price and tap board" style={{ display: 'block', width: '100%', height: '100%', touchAction: 'none' }} onPointerDown={event => {
             const v = runtime.current?.viewport;

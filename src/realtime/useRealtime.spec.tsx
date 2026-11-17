@@ -189,7 +189,7 @@ describe("useRealtime", () => {
     const { unmount } = renderWithQuery(<Harness />, queryClient);
 
     act(() => {
-      handlers.get("feed_health")?.({ ticker: "NVDA", stale: true });
+      handlers.get("feed_health")?.({ ticker: "NVDA", stale: true, prevDayPx: 154.03 });
       handlers.get("balance_update")?.({ free: "42.5" });
       handlers.get("grid_update")?.({
         ticker: "NVDA",
@@ -211,6 +211,7 @@ describe("useRealtime", () => {
     });
 
     expect(useGameStore.getState().feedStale.NVDA).toBe(true);
+    expect(useGameStore.getState().prevDayPx.NVDA).toBe(154.03);
     expect(useGameStore.getState().balance).toBe(42.5);
     expect(queryClient.getQueryData(["balance"])).toEqual({ free: "42.5" });
     expect(useGameStore.getState().cells).toHaveLength(1);

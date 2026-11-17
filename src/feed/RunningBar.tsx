@@ -6,9 +6,14 @@ import { formatEntry, useFeedStore } from "./feedStore";
 import type { TradeFeedEntry } from "./types";
 
 const barStyle = {
-  overflow: "hidden",
+  overflowX: "auto",
+  overflowY: "hidden",
+  scrollbarWidth: "none",
+  width: "100%",
+  height: 32,
+  color: THEME.paper,
   fontFamily: THEME.font,
-  background: THEME.paper,
+  background: THEME.ink,
 } as const;
 const rowStyle = { display: "flex" } as const;
 const trackStyle = { display: "flex", width: "max-content" } as const;
@@ -17,7 +22,8 @@ const entryStyle = {
   alignItems: "center",
   gap: 8,
   whiteSpace: "nowrap",
-  padding: "7px 14px",
+  height: 32,
+  padding: "0 14px",
 } as const;
 
 function shortAddress(address: string | null): string | null {
@@ -28,18 +34,19 @@ function shortAddress(address: string | null): string | null {
 function FeedItem({ entry, ownShort }: { entry: TradeFeedEntry; ownShort: string | null }) {
   const item = formatEntry(entry, ownShort);
   const loss = entry.result === "loss";
-  const background = entry.big && !loss ? THEME.highlight : "transparent";
+  const bigWin = entry.big && !loss;
+  const background = bigWin ? THEME.highlight : "transparent";
   return (
     <span style={{
       ...entryStyle,
       background,
-      color: loss ? THEME.loss : THEME.win,
+      color: bigWin ? THEME.ink : THEME.paper,
       opacity: loss ? 0.65 : 1,
     }}>
       <b>{item.who}</b>
       {item.bot && <small>bot</small>}
       <span>{item.text}</span>
-      <b>{item.amount}</b>
+      <b style={{ color: !loss && !bigWin ? THEME.winOnInk : "inherit" }}>{item.amount}</b>
     </span>
   );
 }
@@ -79,7 +86,7 @@ export function RunningBar({ ownAddress }: { ownAddress: string | null }) {
     <FeedItem key={entry.id} entry={entry} ownShort={ownShort} />
   ));
   return (
-    <div aria-label="Recent trades" className="running-bar" style={barStyle}>
+    <div aria-label="Recent trades" className="running-bar [&::-webkit-scrollbar]:hidden" style={barStyle}>
       <div
         className="running-bar-track"
         style={{ ...trackStyle, animationDuration: `${Math.max(width / 40, 1)}s` }}

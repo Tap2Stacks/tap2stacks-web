@@ -192,8 +192,8 @@ interface GameState {
 export const useGameStore = create<GameState>((set) => ({
   ticker: "NVDA",
   feedStale: { NVDA: false, TSLA: false },
-  balance: 1000.0,
-  serverBalance: 1000.0,
+  balance: 0,
+  serverBalance: 0,
   currentPrice: 0,
   history: [], // Keep track of the line chart
   cells: [],

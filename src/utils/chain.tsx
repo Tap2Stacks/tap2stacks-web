@@ -23,10 +23,6 @@ export function getExplorerSearchUrl(value: string) {
   return `${EXPLORER_BASE_URL}/search?q=${value}`;
 }
 
-export function getExplorerTopicMessagesUrl(topicId: string) {
-  return `${EXPLORER_BASE_URL}/search?q=${topicId}`;
-}
-
 export function showTransactionSubmittedToast({
   hash,
   title,

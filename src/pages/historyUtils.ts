@@ -1,7 +1,9 @@
 import axios from "axios";
-import { format } from "date-fns";
 import { clsx } from "clsx";
+import { format } from "date-fns";
 import { twMerge } from "tailwind-merge";
+import { getAddresses } from "../contracts/addresses";
+import type { CanonicalSettledOrder, Hex, MerkleProofStep } from "../lib/proofVerify";
 
 export const PAGE_SIZE = 10;
 
@@ -12,7 +14,6 @@ export function cn(...inputs: (string | undefined | null | false)[]) {
 export function formatMoney(value: string | number | undefined) {
   const amount =
     typeof value === "number" ? value : Number.parseFloat(value ?? "0");
-
   return `$${amount.toLocaleString(undefined, {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
@@ -21,7 +22,6 @@ export function formatMoney(value: string | number | undefined) {
 
 export function formatDate(value?: string) {
   if (!value) return "Awaiting settlement";
-
   try {
     return format(new Date(value), "MMM d, yyyy · HH:mm:ss");
   } catch {
@@ -29,18 +29,14 @@ export function formatDate(value?: string) {
   }
 }
 
-export function formatAnchorTime(value?: string) {
-  if (!value) return "—";
-
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value;
-
-  const hours = String(date.getHours()).padStart(2, "0");
-  const minutes = String(date.getMinutes()).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-
-  return `${hours}:${minutes} ${day}/${month}`;
+export function formatTimeRange(fromMs: number, toMs: number): string {
+  try {
+    const start = format(new Date(fromMs), "MMM d, HH:mm:ss");
+    const end = format(new Date(toMs), "HH:mm:ss");
+    return `${start} – ${end}`;
+  } catch {
+    return `${fromMs} – ${toMs}`;
+  }
 }
 
 export function shortHash(value?: string, head = 8, tail = 6) {
@@ -49,11 +45,18 @@ export function shortHash(value?: string, head = 8, tail = 6) {
   return `${value.slice(0, head)}...${value.slice(-tail)}`;
 }
 
+export function resolveProofAnchorAddress(): string | null {
+  try {
+    return getAddresses().proofAnchor;
+  } catch {
+    return null;
+  }
+}
+
 export function getResponsePayload(data: unknown) {
   if (data && typeof data === "object" && "data" in data) {
     return (data as { data?: unknown }).data;
   }
-
   return data;
 }
 
@@ -70,38 +73,49 @@ export interface Order {
   status?: string;
 }
 
-interface OrderProofNode {
-  position: string;
-  hash: string;
+export interface ProofBatch {
+  index: number;
+  fromMs: number;
+  toMs: number;
+  tapsRoot: Hex;
+  priceLogHash: Hex;
+  txHash: Hex;
+}
+
+export type AnchoredTap = CanonicalSettledOrder & {
+  leafHash: Hex;
+  proof: MerkleProofStep[];
+};
+
+export interface OrderProofResponse {
+  orderId: string;
+  batch: ProofBatch;
+  tap: AnchoredTap;
+  priceLogIndexes: number[];
 }
 
 export interface OrderProof {
   orderId: string;
-  batchId: string;
-  leafHash: string;
-  merkleRoot: string;
-  proof: OrderProofNode[];
-  verified: boolean;
-  topicId?: string;
-  sequenceNumber?: string;
-  consensusTimestamp?: string;
-  transactionHash?: string;
-  txHash?: string;
+  batch: ProofBatch;
+  tap: AnchoredTap;
+  priceLogIndexes: number[];
+  merkleVerified: boolean;
+  priceLogVerified: boolean;
 }
 
 export function resolveOrderId(order: Order) {
-  if (order.orderId) return order.orderId;
-  if (order.id) return order.id;
-  if (order.order_id) return order.order_id;
-  return undefined;
+  return order.orderId ?? order.id ?? order.order_id;
 }
 
 export function getOrderProofKeys(order: Order) {
   const keys = [order.orderId, order.id, order.order_id]
     .map((value) => value?.trim())
     .filter((value): value is string => Boolean(value));
-
   return [...new Set(keys)];
+}
+
+export function isVoidedOrder(order: Order): boolean {
+  return (order.status ?? "").toUpperCase() === "VOIDED";
 }
 
 export function isOrderSettled(order: Order) {
@@ -109,6 +123,7 @@ export function isOrderSettled(order: Order) {
   return (
     Boolean(order.settledAt) ||
     order.settledWin !== null ||
+    status === "voided" ||
     status.includes("settled") ||
     status.includes("resolved") ||
     status.includes("complete")
@@ -125,10 +140,7 @@ export function isOrderStillAnchoring(order: Order) {
 }
 
 export function normalizeOrders(payload: unknown): Order[] {
-  if (Array.isArray(payload)) {
-    return payload as Order[];
-  }
-
+  if (Array.isArray(payload)) return payload as Order[];
   if (
     payload &&
     typeof payload === "object" &&
@@ -137,54 +149,55 @@ export function normalizeOrders(payload: unknown): Order[] {
   ) {
     return (payload as { items: Order[] }).items;
   }
-
   return [];
 }
 
-export function normalizeProof(payload: unknown): OrderProof | null {
+export function normalizeOrderProofResponse(
+  payload: unknown,
+): OrderProofResponse | null {
   if (!payload || typeof payload !== "object") return null;
-
-  const candidate = payload as Partial<OrderProof>;
-  if (!candidate.orderId || !candidate.batchId) return null;
-
+  const candidate = payload as Partial<OrderProofResponse>;
+  if (!candidate.orderId || !candidate.batch || !candidate.tap) return null;
   return {
     orderId: candidate.orderId,
-    batchId: candidate.batchId,
-    leafHash: candidate.leafHash ?? "",
-    merkleRoot: candidate.merkleRoot ?? "",
-    proof: Array.isArray(candidate.proof) ? candidate.proof : [],
-    verified: Boolean(candidate.verified),
-    topicId: candidate.topicId,
-    sequenceNumber: candidate.sequenceNumber,
-    consensusTimestamp: candidate.consensusTimestamp,
-    transactionHash: candidate.transactionHash,
-    txHash: candidate.txHash,
+    batch: candidate.batch,
+    tap: {
+      ...candidate.tap,
+      proof: Array.isArray(candidate.tap.proof) ? candidate.tap.proof : [],
+    },
+    priceLogIndexes: Array.isArray(candidate.priceLogIndexes)
+      ? candidate.priceLogIndexes
+      : [candidate.batch.index],
   };
 }
 
-export function isProofPendingError(error: unknown) {
-  const fallbackMessage =
-    error instanceof Error ? error.message.toLowerCase() : "";
-
-  if (!axios.isAxiosError(error)) {
-    return /(not ready|pending|processing|anchoring|not found|empty)/.test(
-      fallbackMessage,
-    );
+export function resolveProofError(error: unknown): {
+  pending: boolean;
+  message: string;
+} {
+  if (axios.isAxiosError(error)) {
+    const data = error.response?.data as { code?: string; message?: string } | undefined;
+    if (data?.code === "PROOF_PENDING") {
+      return {
+        pending: true,
+        message: "Proof will be anchored within about 5 minutes",
+      };
+    }
+    if (data?.code === "ORDER_NOT_FOUND") {
+      return { pending: false, message: "Order not found." };
+    }
+    if (error.response?.status === 404 || error.response?.status === 202) {
+      return {
+        pending: true,
+        message: "Proof will be anchored within about 5 minutes",
+      };
+    }
   }
-
-  const status = error.response?.status;
-  if (status === 202 || status === 204 || status === 404 || status === 409) {
-    return true;
-  }
-
-  const responseMessage = getResponsePayload(error.response?.data);
-  const details =
-    typeof responseMessage === "string"
-      ? responseMessage.toLowerCase()
-      : JSON.stringify(responseMessage ?? "").toLowerCase();
-
-  return /(not ready|pending|processing|anchoring|not found|no proof|empty)/.test(
-    `${details} ${fallbackMessage}`,
-  );
+  return {
+    pending: false,
+    message:
+      error instanceof Error
+        ? error.message
+        : "Failed to fetch proof for this order.",
+  };
 }
-

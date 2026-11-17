@@ -3,7 +3,7 @@ import { ChevronLeft, ChevronRight, Loader2, RefreshCw, ScrollText, ShieldCheck 
 import { THEME } from "./ui/theme";
 import {
   cn, formatDate, formatMoney, getOrderProofKeys, isOrderSettled,
-  isOrderStillAnchoring, resolveOrderId, shortHash,
+  isOrderStillAnchoring, isVoidedOrder, resolveOrderId, shortHash,
 } from "./pages/historyUtils";
 import { useHistory } from "./pages/useHistory";
 import { HistoryProofDialog } from "./pages/HistoryProofDialog";
@@ -205,8 +205,14 @@ export const HistoryView: React.FC = () => {
                   const isProofPending =
                     isSettledOrder &&
                     (isOrderStillAnchoring(order) || hasPendingProofFromError);
-                  const statusVariant =
-                    order.settledWin === true
+                  const voided = isVoidedOrder(order);
+                  const statusVariant = voided
+                    ? {
+                        label: "Voided · Refunded",
+                        background: THEME.paper,
+                        color: THEME.ink,
+                      }
+                    : order.settledWin === true
                       ? {
                           label: "Win",
                           background: THEME.yellow,

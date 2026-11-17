@@ -13,6 +13,7 @@ export interface Coin {
   rate: number;
   status: CoinStatus;
   placedAt: number;
+  updatedAt?: number;
 }
 
 export interface CoinStack {

@@ -1,0 +1,5 @@
+import { afterEach, expect, it, vi } from 'vitest';
+import { fetchRecentPrices } from './prices';
+afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks(); });
+it('parses price strings and returns ascending points and reference', async () => { vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, json: async () => ({ prevDayPx: 154, points: [{ ts: 2, price: '155.03' }, { ts: 1, price: '155.01' }, { ts: 3, price: 'bad' }] }) }))); expect(await fetchRecentPrices('NVDA')).toEqual({ prevDayPx: 154, points: [{ ts: 1, price: 155.01 }, { ts: 2, price: 155.03 }] }); });
+it('404, network and malformed responses return empty history, logging only once', async () => { const warn = vi.spyOn(console, 'warn').mockImplementation(() => { }); vi.stubGlobal('fetch', vi.fn(async () => ({ ok: false, status: 404 }))); expect(await fetchRecentPrices('NVDA')).toEqual({ prevDayPx: null, points: [] }); vi.stubGlobal('fetch', vi.fn(async () => { throw new Error('offline'); })); await fetchRecentPrices('TSLA'); vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, json: async () => ({}) }))); await fetchRecentPrices('NVDA'); expect(warn).toHaveBeenCalledTimes(1); });

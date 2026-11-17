@@ -3,6 +3,9 @@ import toast from "react-hot-toast";
 import type { Socket } from "socket.io-client";
 import { rejectMessage, type RejectReason } from "./lib/rejectReasons";
 
+import type { Coin, CoinStack } from "./board/types";
+import { addPendingCoin, applyOrderUpdate, stacksFromOpenOrders, expirePending } from "./board/stacks";
+
 export type Ticker = "NVDA" | "TSLA";
 
 export interface PricePoint {
@@ -39,6 +42,8 @@ export interface GridUpdatePayload {
 }
 
 export interface OrderUpdatePayload {
+  orderId?: string;
+  clientTapId?: string;
   ticker?: string;
   marketId?: string;
   cellId?: string;
@@ -143,6 +148,9 @@ function resolveOrderCellId(
 }
 
 interface GameState {
+  stacks: Record<string, CoinStack>;
+  addPendingCoin: (cellId: string, ticker: string, coin: Coin) => void;
+  expirePendingCoins: (nowMs: number) => void;
   ticker: Ticker;
   feedStale: Record<Ticker, boolean>;
   balance: number;
@@ -190,6 +198,9 @@ interface GameState {
 }
 
 export const useGameStore = create<GameState>((set) => ({
+  stacks: {},
+  addPendingCoin: (cellId, ticker, coin) => set(state => ({ stacks: addPendingCoin(state.stacks, cellId, ticker, coin) })),
+  expirePendingCoins: (nowMs) => set(state => { const stacks = expirePending(state.stacks, nowMs); return stacks === state.stacks ? state : { stacks }; }),
   ticker: "NVDA",
   feedStale: { NVDA: false, TSLA: false },
   balance: 0,
@@ -276,14 +287,14 @@ export const useGameStore = create<GameState>((set) => ({
           }
         }
       }
-      return { bets: newBets, betRates: newBetRates };
+      return { bets: newBets, betRates: newBetRates, stacks: stacksFromOpenOrders(orders) };
     }),
 
   updateOrder: (data: OrderUpdatePayload) => {
     let rejectedMessage: string | undefined;
 
     set((state) => {
-      let newState = { ...state };
+      let newState = { ...state, stacks: applyOrderUpdate(state.stacks, data) };
       let cellId = resolveOrderCellId(data, newState);
 
       if (data.status === "REJECTED") {

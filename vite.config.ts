@@ -1,4 +1,4 @@
-import { defineConfig } from "vitest/config";
+import { configDefaults, defineConfig } from "vitest/config";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 
@@ -18,5 +18,7 @@ export default defineConfig({
   },
   test: {
     environment: "jsdom",
+    // Builder worktrees live inside this folder; their tests belong to their own runs.
+    exclude: [...configDefaults.exclude, ".agent-worktrees/**"],
   },
 });

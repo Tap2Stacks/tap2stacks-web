@@ -7,6 +7,8 @@ export type RejectReason =
   | (string & {});
 
 const REJECT_MESSAGES: Record<string, string> = {
+  CELL_LIMIT: "This cell is full ($100 max per cell).",
+  RATE_LIMITED: "Too many taps, slow down a little.",
   WINDOW_CLOSING: "Too close to start. Tap a later column.",
   STALE_QUOTE: "Odds moved. Tap again.",
   FEED_PAUSED: "Price feed paused. Taps are off for now.",

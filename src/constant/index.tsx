@@ -1,0 +1,5 @@
+export const BACKEND_URL =
+  import.meta.env.VITE_BACKEND_URL ?? "http://127.0.0.1:5000";
+
+export const IS_TAP_TRADING_BACKEND =
+  (import.meta.env.VITE_BACKEND_MODE ?? "tap") === "tap";

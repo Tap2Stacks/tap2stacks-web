@@ -1,0 +1,652 @@
+import React, { useEffect, useRef, useState } from "react";
+import { Dialog, DialogPanel } from "@headlessui/react";
+import { useQueryClient } from "@tanstack/react-query";
+import CryptoJS from "crypto-js";
+import { Link, useLocation } from "react-router-dom";
+import toast from "react-hot-toast";
+import { io, Socket } from "socket.io-client";
+import {
+  useAccount,
+  useConnect,
+  useDisconnect,
+  useSignMessage,
+  useSwitchChain,
+} from "wagmi";
+import { ChevronDown } from "lucide-react";
+import { BACKEND_URL, IS_TAP_TRADING_BACKEND } from "./constant";
+import { legacyTestnet } from "./config/chains";
+import {
+  authControllerGetChallenge,
+  authControllerGetWssKey,
+  authControllerLogin,
+  getAccountControllerGetBalanceQueryKey,
+  useAccountControllerGetBalance,
+} from "./services/queries";
+import { useGameStore } from "./store";
+import { getExplorerAddressUrl } from "./utils/chain";
+
+const NAV_ITEMS = [
+  { label: "Trade", path: "/trade" },
+  { label: "History", path: "/history" },
+  { label: "Wallet", path: "/wallet" },
+  { label: "HCS Anchor", path: "/hcs-anchor" },
+] as const;
+
+const ACCENT = "#2D84EB";
+const SECONDARY = "#4F46E5";
+const DEEP = "#00156E";
+
+function HeaderButton({
+  label,
+  onClick,
+  variant = "secondary",
+  badge,
+}: {
+  label: string;
+  onClick: () => void;
+  variant?: "secondary" | "primary";
+  badge?: string;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="inline-flex h-10 items-center gap-2 rounded-xl px-4 text-sm font-medium transition"
+      style={{
+        background:
+          variant === "primary"
+            ? "linear-gradient(135deg, rgba(45,132,235,1) 0%, rgba(79,70,229,1) 58%, rgba(0,21,110,1) 100%)"
+            : "linear-gradient(180deg, rgba(255,255,255,0.045) 0%, rgba(255,255,255,0.015) 100%)",
+        color: variant === "primary" ? "#ffffff" : "#f5f5f5",
+        border:
+          variant === "primary"
+            ? "1px solid rgba(45, 132, 235, 0.42)"
+            : "1px solid rgba(255,255,255,0.08)",
+        boxShadow:
+          variant === "primary"
+            ? "0 12px 28px rgba(45, 132, 235, 0.22)"
+            : "none",
+      }}
+    >
+      {label}
+      {badge ? (
+        <span className="rounded-md bg-black/10 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.08em]">
+          {badge}
+        </span>
+      ) : null}
+    </button>
+  );
+}
+
+export const Header: React.FC = () => {
+  const updatePrice = useGameStore((state) => state.updatePrice);
+  const updateGrid = useGameStore((state) => state.updateGrid);
+  const setConnection = useGameStore((state) => state.setConnection);
+  const updateOrder = useGameStore((state) => state.updateOrder);
+  const updateBalance = useGameStore((state) => state.updateBalance);
+  const syncTapSnapshot = useGameStore((state) => state.syncTapSnapshot);
+  const syncTapBets = useGameStore((state) => state.syncTapBets);
+
+  const location = useLocation();
+  const { address, isConnected, chain } = useAccount();
+
+  const { connect, connectors } = useConnect();
+  const { disconnect } = useDisconnect();
+  const { signMessageAsync } = useSignMessage();
+  const { switchChain, isPending: isPendingSwitch } = useSwitchChain();
+  const queryClient = useQueryClient();
+
+  const [walletMenuOpen, setWalletMenuOpen] = useState(false);
+  const [token, setToken] = useState<string | null>(
+    localStorage.getItem("token"),
+  );
+  const [isFundModalOpen, setIsFundModalOpen] = useState(false);
+  const [timeRemaining, setTimeRemaining] = useState<number>(0);
+  const [isFunding, setIsFunding] = useState(false);
+
+  const promptedAddress = useRef<string | null>(null);
+  const isLoggingIn = useRef(false);
+
+  const { data: balanceData, refetch: refetchBalance } =
+    useAccountControllerGetBalance({
+      query: {
+        enabled: !IS_TAP_TRADING_BACKEND,
+        queryKey: ["tap-trading-balance-disabled"],
+      },
+    });
+
+  useEffect(() => {
+    localStorage.removeItem("is-demo-mode");
+    localStorage.removeItem("demo-wallet-address");
+    localStorage.removeItem("demo-private-key");
+  }, []);
+
+  useEffect(() => {
+    if (
+      balanceData &&
+      typeof (balanceData as unknown as { free?: string }).free !== "undefined"
+    ) {
+      updateBalance(Number((balanceData as unknown as { free?: string }).free));
+    }
+  }, [balanceData, updateBalance]);
+
+  useEffect(() => {
+    let interval: ReturnType<typeof setInterval>;
+
+    const checkTime = () => {
+      const storedTime = localStorage.getItem("last-fund-time");
+      if (!storedTime) {
+        setTimeRemaining(0);
+        return;
+      }
+
+      const lastTime = parseInt(storedTime, 10);
+      const targetTime = lastTime + 30 * 60 * 1000;
+      const now = Date.now();
+      setTimeRemaining(Math.max(targetTime - now, 0));
+    };
+
+    if (isFundModalOpen) {
+      checkTime();
+      interval = setInterval(checkTime, 1000);
+    }
+
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [isFundModalOpen]);
+
+  const handleLogin = async () => {
+    if (!isConnected || !address || isLoggingIn.current) return;
+
+    const storedToken = localStorage.getItem("token");
+    const storedAddress = localStorage.getItem("wallet-address");
+
+    if (storedToken && storedAddress === address) return;
+    if (promptedAddress.current === address) return;
+
+    isLoggingIn.current = true;
+    promptedAddress.current = address;
+
+    try {
+      const challengeRes = await authControllerGetChallenge({ address });
+      const challenge = (challengeRes as unknown as { challenge: string })
+        .challenge;
+
+      const signature = await signMessageAsync({ message: challenge });
+
+      const loginRes = await authControllerLogin({
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ address, signature }),
+      });
+
+      const accessToken = (loginRes as unknown as { accessToken: string })
+        .accessToken;
+
+      localStorage.setItem("token", accessToken);
+      localStorage.setItem("wallet-address", address);
+      setToken(accessToken);
+      refetchBalance();
+    } catch (error) {
+      console.error("Login failed:", error);
+    } finally {
+      isLoggingIn.current = false;
+    }
+  };
+
+  useEffect(() => {
+    if (IS_TAP_TRADING_BACKEND) return;
+    handleLogin();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isConnected, address]);
+
+  useEffect(() => {
+    if (IS_TAP_TRADING_BACKEND) {
+      const source = new EventSource(`${BACKEND_URL}/stream`);
+      const syncPayload = (payload: Record<string, unknown>) => {
+        const grid = payload.grid as
+          | Record<string, { cells?: Array<Record<string, unknown>> }>
+          | undefined;
+        const mode20 = grid?.["20"];
+        const balanceValue =
+          (payload.balances as Record<string, unknown> | undefined)?.player ??
+          payload.player_balance;
+        syncTapSnapshot({
+          price: Number(payload.P_render ?? payload.P_oracle ?? 0),
+          serverTs: Date.now(),
+          cells: Array.isArray(mode20?.cells)
+            ? mode20.cells.map((cell) => {
+                // Use stable absolute timestamps from backend (no Date.now() drift)
+                const startMs = Number(cell.startTs_ms ?? 0);
+                const endMs = Number(cell.endTs_ms ?? 0);
+                if (startMs > 0 && endMs > 0) {
+                  return {
+                    gridTs: Number(payload.oracle_second ?? 0),
+                    startTs: startMs,
+                    endTs: endMs,
+                    lowerPrice: String(cell.L),
+                    upperPrice: String(cell.R),
+                    rewardRate: String(cell.M_final),
+                    gridSignature: String(cell.cell_id),
+                    betable: Boolean(cell.betable),
+                  };
+                }
+                // Fallback for backends without startTs_ms
+                const now = Date.now();
+                const originalStart = Number(cell.T_start ?? 0);
+                const originalEnd = Number(cell.T_end ?? 0);
+                const remainingStart = Number(cell.remaining_T_start ?? originalStart);
+                const elapsedMs = (originalStart - remainingStart) * 1000;
+                const cycleStartedAt = now - elapsedMs;
+                return {
+                  gridTs: Number(payload.oracle_second ?? 0),
+                  startTs: cycleStartedAt + originalStart * 1000,
+                  endTs: cycleStartedAt + originalEnd * 1000,
+                  lowerPrice: String(cell.L),
+                  upperPrice: String(cell.R),
+                  rewardRate: String(cell.M_final),
+                  gridSignature: String(cell.cell_id),
+                  betable: Boolean(cell.betable),
+                };
+              })
+            : undefined,
+          balance:
+            balanceValue !== undefined ? Number(balanceValue) : undefined,
+        });
+        if (payload.bets) {
+          syncTapBets(payload.bets as {
+            pending?: Array<Record<string, unknown>>;
+            active?: Array<Record<string, unknown>>;
+            resolved?: Array<Record<string, unknown>>;
+            history?: Array<Record<string, unknown>>;
+          });
+        }
+      };
+
+      fetch(`${BACKEND_URL}/status`)
+        .then(async (response) => response.json())
+        .then((payload) => {
+          syncPayload(payload);
+        })
+        .catch((error) => {
+          console.error("tap-trading status bootstrap failed", error);
+        });
+
+      source.addEventListener("oracle_tick", (event) => {
+        syncPayload(JSON.parse((event as MessageEvent).data || "{}"));
+      });
+      source.addEventListener("render_tick", (event) => {
+        syncPayload(JSON.parse((event as MessageEvent).data || "{}"));
+      });
+      source.onerror = () => {
+        console.error("tap-trading stream disconnected");
+      };
+      return () => source.close();
+    }
+
+    let socket: Socket | null = null;
+    let isActive = true;
+
+    const connectWss = async () => {
+      try {
+        socket = io(BACKEND_URL);
+
+        socket.on("connect", async () => {
+          if (!isActive) return;
+
+          try {
+            if (token) {
+              const wssKeyRes = await authControllerGetWssKey();
+              const wssKey = (wssKeyRes as unknown as { key: string }).key;
+              setConnection(socket, wssKey);
+
+              if (address) {
+                const challengeRes = await authControllerGetChallenge({
+                  address: address as string,
+                });
+                const wssChallenge = (
+                  challengeRes as unknown as { challenge: string }
+                ).challenge;
+
+                const hmac = CryptoJS.algo.HMAC.create(
+                  CryptoJS.algo.SHA256,
+                  CryptoJS.enc.Hex.parse(wssKey),
+                );
+                hmac.update(address);
+                hmac.update(wssChallenge);
+
+                const wssSignature = hmac.finalize().toString(CryptoJS.enc.Hex);
+
+                socket?.emit("subscribe_user", {
+                  userId: address,
+                  signature: wssSignature,
+                });
+              }
+            }
+          } catch (error) {
+            console.error("WSS subscription error:", error);
+          }
+        });
+
+        const events = [
+          "grid_update",
+          "balance_update",
+          "order_update",
+          "price_now",
+        ] as const;
+
+        events.forEach((eventName) => {
+          socket?.on(eventName, (data) => {
+            switch (eventName) {
+              case "price_now":
+                if (data?.price) updatePrice(data.price, data.ts);
+                break;
+              case "grid_update":
+                if (Array.isArray(data)) updateGrid(data);
+                break;
+              case "balance_update":
+                if (data) {
+                  queryClient.setQueryData(
+                    getAccountControllerGetBalanceQueryKey(),
+                    data,
+                  );
+                }
+                break;
+              case "order_update":
+                updateOrder(data);
+                break;
+            }
+          });
+        });
+      } catch (error) {
+        console.error("WebSocket setup failed:", error);
+      }
+    };
+
+    connectWss();
+
+    return () => {
+      isActive = false;
+      socket?.disconnect();
+    };
+  }, [
+    address,
+    queryClient,
+    setConnection,
+    syncTapBets,
+    syncTapSnapshot,
+    token,
+    updateGrid,
+    updateOrder,
+    updatePrice,
+  ]);
+
+  const handleDisconnect = () => {
+    disconnect();
+
+    localStorage.removeItem("token");
+    localStorage.removeItem("wallet-address");
+    localStorage.removeItem("is-demo-mode");
+    localStorage.removeItem("demo-wallet-address");
+    localStorage.removeItem("demo-private-key");
+    setToken(null);
+    promptedAddress.current = null;
+    setWalletMenuOpen(false);
+  };
+
+  return (
+    <header
+      className="sticky top-0 z-40 border-b border-white/8 bg-[#070a12]/94 backdrop-blur-xl"
+      style={{
+        fontFamily: "'Space Grotesk', sans-serif",
+        borderTop: "1px solid rgba(45, 132, 235, 0.5)",
+      }}
+    >
+      <div className="mx-auto flex w-full max-w-[1440px] flex-col gap-3 px-4 py-3 sm:px-6 lg:px-8">
+        <div className="flex flex-wrap items-center gap-3 lg:flex-nowrap">
+          <div className="flex min-w-0 items-center gap-4">
+            <Link to="/" className="flex items-center gap-3">
+              <div className="flex h-11 w-11 items-center justify-center rounded-xl border border-white/12 bg-[linear-gradient(145deg,rgba(19,29,55,0.92)_0%,rgba(9,12,22,0.96)_100%)] shadow-[0_10px_30px_rgba(0,0,0,0.32)]">
+                <img
+                  src="/tap2stacks.png"
+                  alt="tap2stacks"
+                  className="h-10 w-10 object-contain"
+                />
+              </div>
+              <div className="flex items-center gap-2">
+                <p className="text-[1.65rem] font-semibold tracking-[-0.06em] text-white">
+                  tap2stacks
+                </p>
+            <span className="hidden rounded-md border border-white/12 bg-[rgba(45,132,235,0.12)] px-2 py-1 text-[10px] font-medium uppercase tracking-[0.12em] text-[#9bcbff] lg:inline-flex">
+                  Beta
+                </span>
+              </div>
+            </Link>
+          </div>
+
+          <nav className="hidden items-center gap-1 rounded-2xl border border-white/10 bg-[rgba(255,255,255,0.02)] p-1 lg:ml-4 lg:flex">
+            {NAV_ITEMS.map((item) => {
+              const isActive = location.pathname === item.path;
+
+              return (
+                <Link
+                  key={item.path}
+                  to={item.path}
+                  className="rounded-xl px-4 py-2 text-sm font-medium transition"
+                  style={{
+                    background: isActive
+                      ? "linear-gradient(135deg, rgba(45,132,235,0.18) 0%, rgba(79,70,229,0.16) 100%)"
+                      : "transparent",
+                    color: isActive ? "#ffffff" : "rgba(255,255,255,0.62)",
+                    border: isActive
+                      ? "1px solid rgba(45,132,235,0.34)"
+                      : "1px solid transparent",
+                    boxShadow: isActive
+                      ? "inset 0 -1px 0 rgba(45,132,235,0.85)"
+                      : "none",
+                  }}
+                >
+                  {item.label}
+                </Link>
+              );
+            })}
+          </nav>
+
+          <div className="ml-auto flex items-center gap-2">
+            {!isConnected ? (
+              <HeaderButton
+                label="Connect wallet"
+                onClick={() => connect({ connector: connectors[0] })}
+                variant="primary"
+              />
+            ) : chain?.id !== legacyTestnet.id ? (
+              <HeaderButton
+                label={isPendingSwitch ? "Switching" : "Switch network"}
+                onClick={() => switchChain?.({ chainId: legacyTestnet.id })}
+                variant="primary"
+              />
+            ) : !token ? (
+              <HeaderButton
+                label="Sign in"
+                onClick={() => {
+                  promptedAddress.current = null;
+                  handleLogin();
+                }}
+                badge="wallet"
+              />
+            ) : (
+              <>
+                <HeaderButton
+                  label="Faucet"
+                  onClick={() => setIsFundModalOpen(true)}
+                />
+                <div className="relative">
+                  <button
+                    type="button"
+                    onClick={() => setWalletMenuOpen((value) => !value)}
+                    className="inline-flex h-10 items-center gap-2 rounded-xl border border-white/10 bg-[rgba(255,255,255,0.03)] px-4 text-sm font-medium text-white transition hover:bg-[rgba(45,132,235,0.12)]"
+                  >
+                    <span className="font-mono text-[13px]">
+                      {address?.slice(0, 6)}...{address?.slice(-4)}
+                    </span>
+                    <ChevronDown size={15} className="text-white/48" />
+                  </button>
+
+                  {walletMenuOpen && (
+                    <div className="absolute right-0 top-[calc(100%+10px)] z-50 w-64 overflow-hidden rounded-2xl border border-white/10 bg-[linear-gradient(165deg,rgba(14,21,42,0.98)_0%,rgba(8,11,21,0.98)_100%)] shadow-[0_30px_80px_rgba(0,0,0,0.45)]">
+                      <div className="border-b border-white/10 px-4 py-3">
+                        <p className="text-[11px] font-medium text-white/42">
+                          Connected wallet
+                        </p>
+                        <p className="mt-2 break-all font-mono text-xs text-white">
+                          {address?.slice(0, 6)}...{address?.slice(-4)}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-2 border-b border-white/10 px-4 py-3">
+                        <button
+                          type="button"
+                          className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs font-medium text-white/75 transition hover:bg-[rgba(45,132,235,0.12)] hover:text-white"
+                          onClick={() => {
+                            if (address) {
+                              navigator.clipboard.writeText(address);
+                              toast.success("Address copied!");
+                            }
+                          }}
+                        >
+                          Copy
+                        </button>
+                        <a
+                          href={getExplorerAddressUrl(address ?? "")}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs font-medium text-white/75 transition hover:bg-[rgba(45,132,235,0.12)] hover:text-white"
+                        >
+                          Explorer
+                        </a>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={handleDisconnect}
+                        className="w-full px-4 py-3 text-left text-sm font-medium text-[#f87171] transition hover:bg-[#f87171]/8"
+                      >
+                        Disconnect
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+
+        <nav className="flex items-center gap-2 overflow-x-auto pb-1 lg:hidden">
+          {NAV_ITEMS.map((item) => {
+            const isActive = location.pathname === item.path;
+
+            return (
+              <Link
+                key={item.path}
+                to={item.path}
+                className="shrink-0 rounded-xl px-4 py-2 text-sm font-medium transition"
+                style={{
+                  background: isActive
+                    ? "linear-gradient(135deg, rgba(45,132,235,0.2) 0%, rgba(79,70,229,0.18) 100%)"
+                    : "rgba(255,255,255,0.03)",
+                  color: isActive ? "#ffffff" : "rgba(255,255,255,0.68)",
+                  border: isActive
+                    ? "1px solid rgba(45,132,235,0.36)"
+                    : "1px solid rgba(255,255,255,0.08)",
+                }}
+              >
+                {item.label}
+              </Link>
+            );
+          })}
+        </nav>
+      </div>
+
+      <Dialog
+        open={isFundModalOpen}
+        onClose={() => setIsFundModalOpen(false)}
+        className="relative z-50"
+      >
+        <div
+          className="fixed inset-0 bg-black/70 backdrop-blur-sm"
+          aria-hidden="true"
+        />
+        <div className="fixed inset-0 flex items-center justify-center p-4">
+          <DialogPanel className="relative mx-4 w-full max-w-md rounded-2xl border border-white/10 bg-[linear-gradient(160deg,rgba(14,21,42,0.98)_0%,rgba(8,11,21,0.98)_100%)] p-6 shadow-[0_24px_80px_rgba(0,0,0,0.45)]">
+            <button
+              type="button"
+              onClick={() => setIsFundModalOpen(false)}
+              className="absolute right-4 top-4 text-white/50 transition hover:text-white"
+            >
+              x
+            </button>
+
+            <h2 className="text-lg font-bold text-white">Faucet account</h2>
+            <p className="mt-2 text-sm leading-6 text-white/65">
+              Claim $100 in test funds. Additional requests unlock every 30
+              minutes.
+            </p>
+
+            <div className="mt-6">
+              {timeRemaining > 0 ? (
+                <div className="rounded-2xl border border-white/8 bg-white/4 px-5 py-4 text-center font-mono text-lg text-white">
+                  Next in {Math.floor(timeRemaining / 1000 / 60)}:
+                  {String(Math.floor((timeRemaining / 1000) % 60)).padStart(
+                    2,
+                    "0",
+                  )}
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={async () => {
+                    const authToken = localStorage.getItem("token");
+                    if (!authToken) return;
+
+                    setIsFunding(true);
+                    try {
+                      await fetch(`${BACKEND_URL}/api/payment/debug/deposit`, {
+                        method: "POST",
+                        headers: {
+                          accept: "*/*",
+                          Authorization: `Bearer ${authToken}`,
+                          "Content-Type": "application/json",
+                        },
+                        body: JSON.stringify({
+                          amount: "100",
+                          txHash: `0x${Date.now()}`,
+                          logIndex: 2,
+                        }),
+                      });
+                      localStorage.setItem(
+                        "last-fund-time",
+                        Date.now().toString(),
+                      );
+                      refetchBalance();
+                    } catch (error) {
+                      console.error("Deposit failed:", error);
+                    } finally {
+                      setIsFunding(false);
+                    }
+                  }}
+                  disabled={isFunding}
+                  className="flex w-full items-center justify-center gap-2 rounded-2xl px-5 py-4 text-sm font-semibold uppercase tracking-[0.16em] text-white transition disabled:opacity-50"
+                  style={{
+                    background: `linear-gradient(135deg, ${ACCENT} 0%, ${SECONDARY} 58%, ${DEEP} 100%)`,
+                    boxShadow: "0 16px 34px rgba(45,132,235,0.24)",
+                  }}
+                >
+                  {isFunding ? "Funding..." : "Fund $100 now"}
+                </button>
+              )}
+            </div>
+          </DialogPanel>
+        </div>
+      </Dialog>
+    </header>
+  );
+};

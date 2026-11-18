@@ -2,14 +2,15 @@ export interface BoardViewport {
   width: number;
   height: number;
   nowMs: number;
+  nowFraction: number;
   msPerPx: number;
   centerPrice: number;
   pricePerPx: number;
 }
 
-/** Maps a timestamp to canvas x with "now" fixed at 30% of board width. */
+/** Maps a timestamp to canvas x with "now" fixed at nowFraction of board width. */
 export function timeToX(v: BoardViewport, ts: number): number {
-  return v.width * 0.3 + (ts - v.nowMs) / v.msPerPx;
+  return v.width * v.nowFraction + (ts - v.nowMs) / v.msPerPx;
 }
 
 /** Maps a price to canvas y with centerPrice at vertical center. */
@@ -37,7 +38,7 @@ export function cellRect(
 export function hitTestCell<
   T extends { startTs: number; endTs: number; lower: number; upper: number },
 >(v: BoardViewport, cells: T[], x: number, y: number): T | undefined {
-  if (x < v.width * 0.3) return undefined;
+  if (x < v.width * v.nowFraction) return undefined;
   for (const cell of cells) {
     const r = cellRect(v, cell);
     if (

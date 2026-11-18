@@ -4,7 +4,7 @@ import { testCell } from "./fixtures";
 import { visibleCells } from "./retainedCells";
 import { drawBoard } from "./draw";
 import { recordingContext } from "../test/recordingContext";
-const viewport = { width: 1000, height: 600, nowMs: 17000, msPerPx: 50, centerPrice: 155, pricePerPx: 0.001 };
+const viewport = { width: 1000, height: 600, nowMs: 17000, nowFraction: 0.3, msPerPx: 50, centerPrice: 155, pricePerPx: 0.001 };
 afterEach(() => vi.restoreAllMocks());
 it("a cell disappearing from quotes stays dimmed through lock and live windows until it scrolls off", () => {
     vi.spyOn(Date, "now").mockReturnValue(10000);

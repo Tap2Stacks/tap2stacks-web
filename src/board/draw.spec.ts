@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { drawBoard, type BoardScene } from './draw';
 import { recordingContext } from '../test/recordingContext';
 import { testCell } from './fixtures';
-const scene: BoardScene = { viewport: { width: 1000, height: 600, nowMs: 10000, msPerPx: 50, pricePerPx: .001, centerPrice: 155 }, cells: [testCell()], line: [{ x: 0, y: 300 }, { x: 300, y: 290 }], livePrice: 155.12, stacks: {} };
+const scene: BoardScene = { viewport: { width: 1000, height: 600, nowMs: 10000, nowFraction: 0.3, msPerPx: 50, pricePerPx: .001, centerPrice: 155 }, cells: [testCell()], line: [{ x: 0, y: 300 }, { x: 300, y: 290 }], livePrice: 155.12, stacks: {} };
 describe('drawBoard', () => {
     it('draws each open cell multiplier as x4.1 and price to 2 decimals', () => { const { ctx, calls } = recordingContext(); drawBoard(ctx, scene); expect(calls.some(c => c.name === 'fillText' && c.args[0] === 'x4.1')).toBe(true); expect(calls.some(c => c.args[0] === '155.12')).toBe(true); });
     it('line uses bezierCurveTo, never lineTo between samples', () => { const { ctx, calls } = recordingContext(); drawBoard(ctx, scene); expect(calls.some(c => c.name === 'bezierCurveTo')).toBe(true); expect(calls.some(c => c.name === 'lineTo')).toBe(false); });

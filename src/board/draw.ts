@@ -107,7 +107,7 @@ export function drawBoard(ctx: CanvasRenderingContext2D, scene: BoardScene): voi
     curve(ctx, scene.line);
     flash(ctx, scene);
     if (scene.livePrice > 0) {
-        const y = priceToY(v, scene.livePrice), x = v.width * .3;
+        const y = priceToY(v, scene.livePrice), x = v.width * v.nowFraction;
         ctx.setLineDash([3, 5]);
         ctx.lineWidth = 1;
         ctx.beginPath();

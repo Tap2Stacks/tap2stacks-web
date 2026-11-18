@@ -12,6 +12,7 @@ const viewport: BoardViewport = {
   width: 1000,
   height: 600,
   nowMs: 10_000,
+  nowFraction: 0.3,
   msPerPx: 50, // 5000 ms = 100 px
   centerPrice: 155,
   pricePerPx: 0.001, // $0.03 = 30 px
@@ -79,5 +80,20 @@ describe("board layout and hit-testing", () => {
     expect(isLocked(10_000, 5_001)).toBe(true);
     expect(isLocked(10_000, 5_000)).toBe(false);
     expect(isLocked(15_000, 10_000)).toBe(false);
+  });
+
+  it("respects custom nowFraction in timeToX and hitTestCell", () => {
+    const phoneVp: BoardViewport = { ...viewport, nowFraction: 0.2 };
+    expect(timeToX(phoneVp, phoneVp.nowMs)).toBe(200);
+
+    const cell = {
+      id: "near-now",
+      startTs: 9_000, // x = 180..280
+      endTs: 14_000,
+      lower: 155.0,
+      upper: 155.03,
+    };
+    expect(hitTestCell(phoneVp, [cell], 190, 285)).toBeUndefined();
+    expect(hitTestCell(phoneVp, [cell], 210, 285)).toBe(cell);
   });
 });

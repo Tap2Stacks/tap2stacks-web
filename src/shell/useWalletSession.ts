@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import toast from "react-hot-toast";
 import {
   useAccount,
   useConnect,
@@ -8,6 +9,7 @@ import {
 } from "wagmi";
 import { requestReconfirmation, useComplianceStore } from "../compliance/store";
 import { baseSepolia } from "../config/chains";
+import { BACKEND_URL } from "../constant";
 import { setAuthToken, useAuthToken } from "../realtime/authToken";
 import {
   authControllerGetChallenge,
@@ -17,6 +19,12 @@ import {
 } from "../services/queries";
 import { useGameStore } from "../store";
 import { useBalanceDisplay } from "./useBalanceDisplay";
+
+function clearDemoKeys() {
+  localStorage.removeItem("is-demo-mode");
+  localStorage.removeItem("demo-wallet-address");
+  localStorage.removeItem("demo-private-key");
+}
 
 async function submitLogin(address: string, signature: string) {
   const login = () =>
@@ -46,6 +54,21 @@ async function submitLogin(address: string, signature: string) {
   }
 }
 
+async function postDevTopUp(authToken: string): Promise<void> {
+  const response = await fetch(`${BACKEND_URL}/api/payment/debug/deposit`, {
+    method: "POST",
+    headers: {
+      accept: "*/*",
+      Authorization: `Bearer ${authToken}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ amount: 100 }),
+  });
+  if (!response.ok) {
+    throw new Error(`HTTP ${response.status}`);
+  }
+}
+
 export function useWalletSession() {
   const balance = useGameStore((s) => s.balance);
   const displayedBalance = useBalanceDisplay(balance);
@@ -57,6 +80,7 @@ export function useWalletSession() {
   const { switchChain, isPending: isPendingSwitch } = useSwitchChain();
   const token = useAuthToken();
   const attested = useComplianceStore((s) => s.attested);
+  const [isFunding, setIsFunding] = useState(false);
   const promptedAddress = useRef<string | null>(null);
   const isLoggingIn = useRef(false);
 
@@ -69,28 +93,46 @@ export function useWalletSession() {
     });
 
   useEffect(() => {
+    clearDemoKeys();
+  }, []);
+
+  useEffect(() => {
     const free = (balanceData as unknown as { free?: string } | undefined)?.free;
     if (free !== undefined) updateBalance(Number(free));
   }, [balanceData, updateBalance]);
 
   const handleLogin = useCallback(async () => {
     if (!isConnected || !address || !attested || isLoggingIn.current) return;
-    if (localStorage.getItem("token") && localStorage.getItem("wallet-address") === address) return;
+    if (
+      localStorage.getItem("token") &&
+      localStorage.getItem("wallet-address") === address
+    ) {
+      return;
+    }
     if (promptedAddress.current === address) return;
 
     isLoggingIn.current = true;
     promptedAddress.current = address;
     try {
       const challengeRes = await authControllerGetChallenge({ address });
-      const challenge = (challengeRes as unknown as { challenge: string }).challenge;
+      const challenge = (challengeRes as unknown as { challenge: string })
+        .challenge;
       const signature = await signMessageAsync({ message: challenge });
       const res = await submitLogin(address, signature);
-      const accessToken = (res as unknown as { accessToken: string }).accessToken;
+      const accessToken = (res as unknown as { accessToken: string })
+        .accessToken;
       localStorage.setItem("wallet-address", address);
       setAuthToken(accessToken);
       void refetchBalance();
-    } catch {
-      // Login errors handled via compliance block or retry
+    } catch (error) {
+      const status = (error as { response?: { status?: number } })?.response
+        ?.status;
+      if (status === 451) {
+        useComplianceStore.getState().block();
+      } else {
+        console.error("Login failed:", error);
+        toast.error("Sign in failed");
+      }
     } finally {
       isLoggingIn.current = false;
     }
@@ -100,9 +142,26 @@ export function useWalletSession() {
     void handleLogin();
   }, [handleLogin]);
 
+  const handleDevTopUp = useCallback(async () => {
+    const authToken = localStorage.getItem("token") ?? token;
+    if (!authToken || isFunding) return;
+    setIsFunding(true);
+    try {
+      await postDevTopUp(authToken);
+      toast.success("Added 100 test credits");
+      void refetchBalance();
+    } catch (error) {
+      console.error("Deposit failed:", error);
+      toast.error("Failed to add test credits");
+    } finally {
+      setIsFunding(false);
+    }
+  }, [isFunding, refetchBalance, token]);
+
   const handleDisconnect = useCallback(() => {
     disconnect();
     localStorage.removeItem("wallet-address");
+    clearDemoKeys();
     setAuthToken(null);
     promptedAddress.current = null;
   }, [disconnect]);
@@ -118,10 +177,12 @@ export function useWalletSession() {
     chain,
     token,
     displayedBalance,
+    isFunding,
     connectWallet: () => connect({ connector: connectors[0] }),
     switchToBaseSepolia: () => switchChain?.({ chainId: baseSepolia.id }),
     isPendingSwitch,
     promptLogin,
     handleDisconnect,
+    handleDevTopUp,
   };
 }

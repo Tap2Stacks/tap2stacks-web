@@ -1,18 +1,19 @@
-import React, { useEffect, useState } from "react";
+import React from "react";
 import { Outlet } from "react-router-dom";
-import { useRealtime } from "../realtime/useRealtime";
-import { THEME } from "../ui/theme";
 import { useAccount } from "wagmi";
+import { boardCellCenter } from "../board/centers";
 import { RunningBar } from "../feed/RunningBar";
 import { FxCanvas } from "../fx/FxCanvas";
 import { WinBanner } from "../fx/WinBanner";
-import { useWinWatcher } from "../realtime/winWatcher";
-import { boardCellCenter } from "../board/centers";
-import { useGameStore } from "../store";
 import { BellPill } from "../pages/BellPill";
+import { useRealtime } from "../realtime/useRealtime";
+import { useWinWatcher } from "../realtime/winWatcher";
+import { useGameStore } from "../store";
+import { THEME } from "../ui/theme";
+import { BottomNav } from "./BottomNav";
 import { Header } from "./Header";
-
-const MIN_DESKTOP_WIDTH = 1024;
+import { PhoneHeader } from "./PhoneHeader";
+import { useIsPhone } from "./useIsPhone";
 
 export interface LayoutProps {
   runningBar?: React.ReactNode;
@@ -23,50 +24,35 @@ export const Layout: React.FC<LayoutProps> = ({ runningBar, bellSlot }) => {
   useRealtime();
   useWinWatcher();
   const { address } = useAccount();
-  const ticker = useGameStore(state => state.ticker);
-
-  const [isSmallScreen, setIsSmallScreen] = useState(() =>
-    typeof window !== "undefined" ? window.innerWidth < MIN_DESKTOP_WIDTH : false,
-  );
-
-  useEffect(() => {
-    const onResize = () => {
-      setIsSmallScreen(window.innerWidth < MIN_DESKTOP_WIDTH);
-    };
-    onResize();
-    window.addEventListener("resize", onResize);
-    return () => window.removeEventListener("resize", onResize);
-  }, []);
+  const ticker = useGameStore((state) => state.ticker);
+  const isPhone = useIsPhone();
 
   return (
     <div
-      className="flex h-screen w-full flex-col overflow-x-auto overflow-y-hidden"
+      className={`flex h-[100dvh] w-full flex-col overflow-y-hidden ${isPhone ? "overflow-x-hidden" : "overflow-x-auto"}`}
       style={{
         backgroundColor: THEME.paper,
         color: THEME.ink,
         fontFamily: THEME.font,
       }}
     >
-      {isSmallScreen ? (
+      <div
+        className={`flex min-h-0 flex-1 flex-col ${isPhone ? "w-full min-w-0" : "min-w-[1024px]"}`}
+      >
         <div
-          role="status"
-          className="shrink-0 border-b px-3 py-1.5 text-center text-xs font-bold"
-          style={{
-            backgroundColor: THEME.highlight,
-            color: THEME.ink,
-            borderColor: THEME.ink,
-          }}
+          className={`${isPhone ? "h-7" : "h-8"} shrink-0 overflow-hidden`}
         >
-          Best on a bigger screen for now
+          {runningBar ?? <RunningBar ownAddress={address ?? null} />}
         </div>
-      ) : null}
-
-      <div className="flex min-h-0 min-w-[1024px] flex-1 flex-col">
-        <div className="h-8 shrink-0 overflow-hidden">{runningBar ?? <RunningBar ownAddress={address ?? null} />}</div>
-        <Header bellSlot={bellSlot ?? <BellPill />} />
+        {isPhone ? (
+          <PhoneHeader bellSlot={bellSlot ?? <BellPill />} />
+        ) : (
+          <Header bellSlot={bellSlot ?? <BellPill />} />
+        )}
         <main className="flex min-h-0 flex-1 flex-col overflow-auto">
           <Outlet />
         </main>
+        {isPhone ? <BottomNav /> : null}
       </div>
       <FxCanvas viewingTicker={ticker} cellCenter={boardCellCenter} />
       <WinBanner />

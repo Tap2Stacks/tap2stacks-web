@@ -141,7 +141,7 @@ describe("shell (Header, Layout, THEME)", () => {
     expect(mockSwitchChain).toHaveBeenCalledWith({ chainId: 84532 });
   });
 
-  it("Layout shows the small-screen note below 1024 px", () => {
+  it("Layout switches to the phone shell below 1024 px without the old small-screen banner", () => {
     renderShell(
       <Routes>
         <Route element={<Layout runningBar={<div>Tape</div>} />}>
@@ -152,7 +152,7 @@ describe("shell (Header, Layout, THEME)", () => {
 
     expect(screen.getByText("Tape")).toBeTruthy();
     expect(screen.getByText("Trade body")).toBeTruthy();
-    expect(screen.queryByText("Best on a bigger screen for now")).toBeNull();
+    expect(screen.queryByRole("navigation", { name: "Mobile navigation" })).toBeNull();
 
     act(() => {
       Object.defineProperty(window, "innerWidth", {
@@ -163,6 +163,7 @@ describe("shell (Header, Layout, THEME)", () => {
       window.dispatchEvent(new Event("resize"));
     });
 
-    expect(screen.getByText("Best on a bigger screen for now")).toBeTruthy();
+    expect(screen.queryByText("Best on a bigger screen for now")).toBeNull();
+    expect(screen.getByRole("navigation", { name: "Mobile navigation" })).toBeTruthy();
   });
 });

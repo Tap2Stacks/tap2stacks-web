@@ -45,7 +45,7 @@ export const Layout: React.FC<LayoutProps> = ({ runningBar, bellSlot }) => {
           {runningBar ?? <RunningBar ownAddress={address ?? null} />}
         </div>
         {isPhone ? (
-          <PhoneHeader bellSlot={bellSlot ?? <BellPill />} />
+          <PhoneHeader bellSlot={bellSlot ?? <BellPill compact />} />
         ) : (
           <Header bellSlot={bellSlot ?? <BellPill />} />
         )}

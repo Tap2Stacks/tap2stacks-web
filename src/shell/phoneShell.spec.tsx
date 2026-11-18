@@ -50,6 +50,8 @@ vi.mock("../fx/WinBanner", () => ({
 }));
 
 import { Layout } from "./Layout";
+import { PhoneHeader } from "./PhoneHeader";
+import { BellPill } from "../pages/BellPill";
 
 function setWidth(w: number) {
   Object.defineProperty(window, "innerWidth", {
@@ -92,6 +94,7 @@ describe("phone shell", () => {
   });
 
   afterEach(() => {
+    vi.useRealTimers();
     cleanup();
     vi.clearAllMocks();
   });
@@ -161,5 +164,42 @@ describe("phone shell", () => {
       screen.getByRole("navigation", { name: "Primary" }),
     ).toBeTruthy();
     expect(mockRealtimeMount).toHaveBeenCalledTimes(1);
+  });
+
+  it("BellPill compact renders 'Bell 2h 14m' before session and 'Bell live' when live", () => {
+    vi.useFakeTimers();
+    // 2026-11-17T14:30:00Z is 09:30 ET; 2h 14m before is 12:16:00Z
+    vi.setSystemTime(new Date("2026-11-17T12:16:00.000Z"));
+    const { rerender } = render(<BellPill compact />);
+    expect(screen.getByText("Bell 2h 14m")).toBeTruthy();
+
+    rerender(<BellPill />);
+    expect(screen.getByText("Bell 09:30 ET in 2h 14m")).toBeTruthy();
+
+    vi.setSystemTime(new Date("2026-11-17T14:40:00.000Z"));
+    act(() => {
+      vi.advanceTimersByTime(1000);
+    });
+    rerender(<BellPill compact />);
+    expect(screen.getByText("Bell live")).toBeTruthy();
+
+    rerender(<BellPill />);
+    expect(screen.getByText("Opening Bell live")).toBeTruthy();
+  });
+
+  it("PhoneHeader renders compact BellPill and a Connect button", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-11-17T12:16:00.000Z"));
+    const qc = new QueryClient();
+    render(
+      <QueryClientProvider client={qc}>
+        <MemoryRouter>
+          <PhoneHeader />
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+
+    expect(screen.getByText("Bell 2h 14m")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Connect" })).toBeTruthy();
   });
 });

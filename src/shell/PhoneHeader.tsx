@@ -3,6 +3,7 @@ import { ChevronDown } from "lucide-react";
 import toast from "react-hot-toast";
 import { Link } from "react-router-dom";
 import { baseSepolia } from "../config/chains";
+import { BellPill } from "../pages/BellPill";
 import { THEME } from "../ui/theme";
 import { getExplorerAddressUrl } from "../utils/chain";
 import { useWalletSession } from "./useWalletSession";
@@ -122,7 +123,7 @@ export const PhoneHeader: React.FC<{ bellSlot?: React.ReactNode }> = ({ bellSlot
   const session = useWalletSession();
   return (
     <header
-      className="shrink-0 border-b px-3 py-2"
+      className="shrink-0 border-b px-2.5 py-2"
       style={{
         backgroundColor: THEME.paper,
         color: THEME.ink,
@@ -130,15 +131,15 @@ export const PhoneHeader: React.FC<{ bellSlot?: React.ReactNode }> = ({ bellSlot
         fontFamily: THEME.font,
       }}
     >
-      <div className="flex items-center justify-between gap-1.5">
-        <Link to="/trade" className="shrink-0 text-[15px] font-extrabold tracking-tight">
+      <div className="flex items-center justify-between gap-1">
+        <Link to="/trade" className="shrink-0 text-sm font-extrabold tracking-tight">
           tap2stacks
         </Link>
-        <div className="flex min-w-0 items-center gap-1.5">
-          {bellSlot ? <div className="hidden min-[375px]:block shrink-0">{bellSlot}</div> : null}
+        <div className="flex min-w-0 items-center gap-1">
+          <div className="shrink-0">{bellSlot ?? <BellPill compact />}</div>
           <div
             data-testid="balance-pill"
-            className="shrink-0 rounded-lg px-2 py-1 text-[11px] font-bold tabular-nums"
+            className="shrink-0 rounded-lg px-1.5 py-0.5 text-[11px] font-bold tabular-nums"
             style={{ backgroundColor: THEME.ink, color: THEME.paper }}
           >
             ${session.displayedBalance.toFixed(2)}

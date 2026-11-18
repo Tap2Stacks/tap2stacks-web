@@ -3,6 +3,7 @@ import { ChevronDown } from "lucide-react";
 import toast from "react-hot-toast";
 import { Link, useLocation } from "react-router-dom";
 import { baseSepolia } from "../config/chains";
+import { isDevMode } from "../config/dev";
 import { THEME } from "../ui/theme";
 import { getExplorerAddressUrl } from "../utils/chain";
 import { useWalletSession } from "./useWalletSession";
@@ -137,7 +138,7 @@ export const Header: React.FC<HeaderProps> = ({ bellSlot }) => {
             />
           ) : (
             <>
-              {import.meta.env.DEV ? (
+              {import.meta.env.DEV && isDevMode() ? (
                 <HeaderButton
                   label={
                     session.isFunding

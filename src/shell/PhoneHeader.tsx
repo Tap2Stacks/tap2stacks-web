@@ -3,6 +3,7 @@ import { ChevronDown } from "lucide-react";
 import toast from "react-hot-toast";
 import { Link } from "react-router-dom";
 import { baseSepolia } from "../config/chains";
+import { isDevMode } from "../config/dev";
 import { BellPill } from "../pages/BellPill";
 import { THEME } from "../ui/theme";
 import { getExplorerAddressUrl } from "../utils/chain";
@@ -60,7 +61,7 @@ function AccountMenu({
               Explorer
             </a>
           </div>
-          {import.meta.env.DEV ? (
+          {import.meta.env.DEV && isDevMode() ? (
             <button
               type="button"
               disabled={isFunding}

@@ -1,6 +1,7 @@
 import React from "react";
 import { ArrowDownUp, CircleDollarSign, Coins, Droplets, RefreshCw, ShieldCheck, Wallet } from "lucide-react";
 import { baseSepolia } from "./config/chains";
+import { isDevMode } from "./config/dev";
 import { ActionButton, StatCard } from "./pages/WalletCards";
 import { useWallet } from "./pages/useWallet";
 import { formatAmount, formatCompactNumber } from "./pages/walletUtils";
@@ -212,7 +213,7 @@ function TransferCard(w: ReturnType<typeof useWallet>) {
           <p className="text-sm font-semibold text-ink">On-chain wallet not set up yet</p>
           <p className="mt-1.5 text-xs text-ink/70">
             Contract addresses are not configured.
-            {import.meta.env.DEV ? " Use the dev top-up button in the header for local testing." : ""}
+            {import.meta.env.DEV && isDevMode() ? " Use the dev top-up button in the header for local testing." : ""}
           </p>
         </div>
       ) : (

@@ -7,6 +7,7 @@ interface ImportMetaEnv {
   readonly VITE_TUSDC_ADDRESS?: string;
   readonly VITE_VAULT_ADDRESS?: string;
   readonly VITE_PROOF_ANCHOR_ADDRESS?: string;
+  readonly VITE_ENABLE_DEV_TOOLS?: string;
 }
 
 interface ImportMeta {

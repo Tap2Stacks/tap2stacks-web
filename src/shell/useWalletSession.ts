@@ -9,6 +9,7 @@ import {
 } from "wagmi";
 import { requestReconfirmation, useComplianceStore } from "../compliance/store";
 import { baseSepolia } from "../config/chains";
+import { isDevMode } from "../config/dev";
 import { BACKEND_URL } from "../constant";
 import { setAuthToken, useAuthToken } from "../realtime/authToken";
 import {
@@ -143,6 +144,7 @@ export function useWalletSession() {
   }, [handleLogin]);
 
   const handleDevTopUp = useCallback(async () => {
+    if (!import.meta.env.DEV || !isDevMode()) return;
     const authToken = localStorage.getItem("token") ?? token;
     if (!authToken || isFunding) return;
     setIsFunding(true);

@@ -65,7 +65,7 @@ export const ProofsView: React.FC = () => {
   const anchorAddress = resolveProofAnchorAddress();
 
   return (
-    <div className="relative mx-auto flex w-full max-w-7xl flex-1 flex-col gap-4 px-4 py-5 sm:px-6 lg:px-10 lg:py-7">
+    <div className="relative mx-auto flex w-full min-w-0 max-w-7xl flex-1 flex-col gap-4 px-3 py-4 sm:px-6 lg:px-10 lg:py-7">
       <section className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
           <div
@@ -79,7 +79,7 @@ export const ProofsView: React.FC = () => {
             <p className="text-xs text-ink/70">Anchored settlement batches and price logs on Base Sepolia</p>
           </div>
         </div>
-        <div className="flex items-center gap-2 text-xs text-ink/70">
+        <div className="flex flex-wrap items-center gap-2 text-xs text-ink/70">
           {anchorAddress ? (
             <a
               href={getExplorerAddressUrl(anchorAddress)}
@@ -109,7 +109,7 @@ export const ProofsView: React.FC = () => {
       </section>
 
       <section
-        className="overflow-hidden rounded-xl"
+        className="min-w-0 overflow-hidden rounded-xl"
         style={{ background: THEME.paper, border: `1.5px solid ${THEME.ink}`, boxShadow: `0 2px 0 ${THEME.ink}` }}
       >
         <div className="flex items-center justify-between px-5 py-4" style={{ borderBottom: `1.5px solid ${THEME.ink}` }}>
@@ -151,7 +151,7 @@ export const ProofsView: React.FC = () => {
             </div>
           </div>
         ) : (
-          <div className="space-y-2.5 p-4">
+          <div className="space-y-2.5 overflow-x-auto p-3 sm:p-4">
             {batches.map((batch, i) => (
               <BatchRow key={batch.index} batch={batch} alt={i % 2 === 1} />
             ))}

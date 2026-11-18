@@ -20,7 +20,7 @@ export const HistoryView: React.FC = () => {
     fetchHistory, openProof, stats, hasNextPage } = state;
   return (
     <>
-      <div className="relative mx-auto flex w-full max-w-7xl flex-1 flex-col gap-4 px-4 py-5 sm:px-6 lg:px-10 lg:py-7">
+      <div className="relative mx-auto flex w-full min-w-0 max-w-7xl flex-1 flex-col gap-4 px-3 py-4 sm:px-6 lg:px-10 lg:py-7">
 
         <section className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-3">
@@ -145,7 +145,7 @@ export const HistoryView: React.FC = () => {
           </aside>
 
           <div
-            className="overflow-hidden rounded-xl"
+            className="min-w-0 overflow-hidden rounded-xl"
             style={{
               background: PANEL_BG,
               border: `1.5px solid ${BORDER}`,
@@ -192,7 +192,7 @@ export const HistoryView: React.FC = () => {
                 </div>
               </div>
             ) : (
-              <div className="space-y-2.5 p-3 sm:p-4">
+              <div className="space-y-2.5 overflow-x-auto p-3 sm:p-4">
                 {orders.map((order, index) => {
                   const orderId = resolveOrderId(order);
                   const orderProofKeys = getOrderProofKeys(order);

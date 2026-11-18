@@ -225,7 +225,7 @@ function TransferCard(w: ReturnType<typeof useWallet>) {
 export const WalletView: React.FC = () => {
   const w = useWallet();
   return (
-    <div className="relative mx-auto flex w-full max-w-7xl flex-1 flex-col gap-4 px-4 py-5 sm:px-6 lg:px-10 lg:py-7">
+    <div className="relative mx-auto flex w-full min-w-0 max-w-7xl flex-1 flex-col gap-4 px-3 py-4 sm:px-6 lg:px-10 lg:py-7">
       <section className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
           <div className="flex h-10 w-10 items-center justify-center rounded-full border" style={{ borderColor: THEME.ink, background: THEME.yellow }}>
@@ -266,7 +266,7 @@ export const WalletView: React.FC = () => {
       </section>
 
       <section className="grid gap-4 lg:grid-cols-[1fr_1fr]">
-        <div className="space-y-4">
+        <div className="min-w-0 space-y-4">
           <WalletOverview
             shortAddress={w.shortAddress}
             chainName={w.chain?.name}

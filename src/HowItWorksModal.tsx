@@ -70,7 +70,7 @@ export const HowItWorksModal: React.FC = () => {
             initial={{ opacity: 0, scale: 0.95, y: 20 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: 20 }}
-            className="relative w-full max-w-md overflow-hidden rounded-xl border-2 border-ink bg-paper text-ink shadow-xl"
+            className="relative max-h-[calc(100dvh-24px)] w-full max-w-[calc(100vw-24px)] overflow-y-auto rounded-xl border-2 border-ink bg-paper text-ink shadow-xl lg:max-w-md"
           >
             <button
               type="button"

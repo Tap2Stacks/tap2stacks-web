@@ -151,7 +151,7 @@ export function HistoryProofDialog({ state }: { state: HistoryState }) {
     <Dialog open={isProofOpen} onClose={closeProof} className="relative z-50">
       <div className="fixed inset-0 bg-ink/50 backdrop-blur-sm" aria-hidden />
       <div className="fixed inset-0 flex items-center justify-center p-4">
-        <DialogPanel className="relative w-full max-w-3xl overflow-hidden rounded-xl border border-ink/20 bg-paper shadow-xl">
+        <DialogPanel className="relative w-full max-w-[calc(100vw-24px)] overflow-hidden rounded-xl border border-ink/20 bg-paper shadow-xl lg:max-w-3xl">
           <button
             type="button"
             onClick={closeProof}

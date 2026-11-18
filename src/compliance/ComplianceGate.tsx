@@ -13,7 +13,7 @@ export function ComplianceGate() {
         role="dialog"
         aria-modal="true"
         aria-labelledby="compliance-title"
-        className="w-full max-w-lg rounded-xl bg-paper p-7 font-mono text-ink shadow-xl"
+        className="max-h-[calc(100dvh-24px)] w-full max-w-[calc(100vw-24px)] overflow-y-auto rounded-xl bg-paper p-5 font-mono text-ink shadow-xl lg:max-w-lg lg:p-7"
         style={{
           backgroundColor: THEME.paper,
           color: THEME.ink,

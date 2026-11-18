@@ -10,9 +10,13 @@ import { useWalletSession } from "./useWalletSession";
 
 function AccountMenu({
   address,
+  isFunding,
+  onDevTopUp,
   onDisconnect,
 }: {
   address?: string;
+  isFunding: boolean;
+  onDevTopUp: () => void;
   onDisconnect: () => void;
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
@@ -56,6 +60,20 @@ function AccountMenu({
               Explorer
             </a>
           </div>
+          {import.meta.env.DEV ? (
+            <button
+              type="button"
+              disabled={isFunding}
+              onClick={() => {
+                onDevTopUp();
+                setMenuOpen(false);
+              }}
+              className="w-full border-b px-3 py-2 text-left text-xs font-bold disabled:opacity-50"
+              style={{ borderColor: "rgba(29, 27, 24, 0.15)", color: THEME.ink }}
+            >
+              {isFunding ? "Funding..." : "Add 100 test credits"}
+            </button>
+          ) : null}
           <button
             type="button"
             onClick={() => {
@@ -116,7 +134,14 @@ function AccountControl(s: ReturnType<typeof useWalletSession>) {
       </button>
     );
   }
-  return <AccountMenu address={s.address} onDisconnect={s.handleDisconnect} />;
+  return (
+    <AccountMenu
+      address={s.address}
+      isFunding={s.isFunding}
+      onDevTopUp={() => void s.handleDevTopUp()}
+      onDisconnect={s.handleDisconnect}
+    />
+  );
 }
 
 export const PhoneHeader: React.FC<{ bellSlot?: React.ReactNode }> = ({ bellSlot }) => {

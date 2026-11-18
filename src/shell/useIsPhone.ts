@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 
-const PHONE_BREAKPOINT = 1024;
+export const PHONE_BREAKPOINT = 1024;
 
 export function useIsPhone(): boolean {
   const [isPhone, setIsPhone] = useState(() =>

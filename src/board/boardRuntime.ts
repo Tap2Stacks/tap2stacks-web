@@ -4,6 +4,7 @@ import { createChartClock } from './clock';
 import { createSmoothValue } from './smooth';
 import { cellRect, priceToY, timeToX, type BoardViewport } from './layout';
 import { boardScale } from './boardScale';
+import { PHONE_BREAKPOINT } from '../shell/useIsPhone';
 import { createDrawnSeries } from './drawnSeries';
 import { visibleCells } from './retainedCells';
 import { seriesFor, shouldRedraw } from './priceSeries';
@@ -91,7 +92,7 @@ export class BoardRuntime {
         const middle = this.center.sample(target, perf, !!this.reduced?.matches);
         // Six epoch-aligned windows can end almost 35 s from now. Keep the scale
         // fixed across column rolls so the entire curve never jumps horizontally.
-        const scale = boardScale(this.size.width, this.size.height, window.innerWidth < 1024);
+        const scale = boardScale(this.size.width, this.size.height, window.innerWidth < PHONE_BREAKPOINT);
         const v: BoardViewport = { ...this.size, nowMs: now, nowFraction: scale.nowFraction, msPerPx: 35000 / (this.size.width * (1 - scale.nowFraction)), centerPrice: middle, pricePerPx: state.modePriceStep * scale.visibleRows / this.size.height };
         this.viewport = v;
         return { v, live, target, points };

@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { act, cleanup, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { useEffect } from "react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -19,12 +19,18 @@ vi.mock("../realtime/winWatcher", () => ({
   useWinWatcher: vi.fn(),
 }));
 
+let mockAccountState: {
+  address?: string;
+  isConnected: boolean;
+  chain?: { id: number; name: string };
+} = {
+  address: "0x1111111111111111111111111111111111111111",
+  isConnected: false,
+  chain: undefined,
+};
+
 vi.mock("wagmi", () => ({
-  useAccount: () => ({
-    address: "0x1111111111111111111111111111111111111111",
-    isConnected: false,
-    chain: undefined,
-  }),
+  useAccount: () => mockAccountState,
   useConnect: () => ({ connect: vi.fn(), connectors: [{ id: "mock" }] }),
   useDisconnect: () => ({ disconnect: vi.fn() }),
   useSignMessage: () => ({ signMessageAsync: vi.fn() }),
@@ -90,11 +96,17 @@ describe("phone shell", () => {
   beforeEach(() => {
     localStorage.clear();
     mockRealtimeMount.mockReset();
+    mockAccountState = {
+      address: "0x1111111111111111111111111111111111111111",
+      isConnected: false,
+      chain: undefined,
+    };
     useGameStore.setState({ balance: 0, serverBalance: 0 });
   });
 
   afterEach(() => {
     vi.useRealTimers();
+    vi.restoreAllMocks();
     cleanup();
     vi.clearAllMocks();
   });
@@ -201,5 +213,42 @@ describe("phone shell", () => {
 
     expect(screen.getByText("Bell 2h 14m")).toBeTruthy();
     expect(screen.getByRole("button", { name: "Connect" })).toBeTruthy();
+  });
+
+  it("PhoneHeader account menu shows DEV 'Add 100 test credits' and posts debug deposit", async () => {
+    mockAccountState = {
+      address: "0x1111111111111111111111111111111111111111",
+      isConnected: true,
+      chain: { id: 84532, name: "Base Sepolia" },
+    };
+    localStorage.setItem("token", "test-jwt");
+    localStorage.setItem(
+      "wallet-address",
+      "0x1111111111111111111111111111111111111111",
+    );
+    const fetchSpy = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValue(new Response("{}", { status: 200 }));
+
+    const qc = new QueryClient();
+    render(
+      <QueryClientProvider client={qc}>
+        <MemoryRouter>
+          <PhoneHeader />
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /0x11\.\.11/ }));
+    const topUpBtn = screen.getByRole("button", { name: "Add 100 test credits" });
+    fireEvent.click(topUpBtn);
+
+    expect(fetchSpy).toHaveBeenCalledWith(
+      expect.stringMatching(/\/api\/payment\/debug\/deposit$/),
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({ amount: 100 }),
+      }),
+    );
   });
 });

@@ -2,7 +2,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, cleanup, fireEvent, render, renderHook, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { isDevMode } from "./dev";
+import { isDevMode, isPreviewTopUpEnabled, isTopUpEnabled } from "./dev";
 
 let mockAccountState: {
   address?: string;
@@ -102,5 +102,55 @@ describe("dev-only gating", () => {
     });
 
     expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it("VITE_PREVIEW_TOPUP defaults off in production and enables only top-up when set to 'true'", () => {
+    expect(isPreviewTopUpEnabled({ DEV: false })).toBe(false);
+    expect(isPreviewTopUpEnabled({ DEV: false, VITE_PREVIEW_TOPUP: "false" })).toBe(false);
+    expect(isPreviewTopUpEnabled({ DEV: false, VITE_PREVIEW_TOPUP: "true" })).toBe(true);
+
+    expect(isTopUpEnabled({ DEV: false })).toBe(false);
+    expect(isTopUpEnabled({ DEV: false, VITE_PREVIEW_TOPUP: "true" })).toBe(true);
+    expect(isDevMode({ DEV: false, VITE_PREVIEW_TOPUP: "true" })).toBe(false);
+  });
+
+  it("shows labelled test/play top-up in Header and PhoneHeader when VITE_PREVIEW_TOPUP='true' in production mode, without dev hints", async () => {
+    vi.stubEnv("VITE_ENABLE_DEV_TOOLS", "false");
+    vi.stubEnv("VITE_PREVIEW_TOPUP", "true");
+    vi.stubEnv("VITE_TUSDC_ADDRESS", "");
+    vi.stubEnv("VITE_VAULT_ADDRESS", "");
+    vi.stubEnv("VITE_PROOF_ANCHOR_ADDRESS", "");
+
+    const qc = new QueryClient();
+    const { unmount } = render(
+      <QueryClientProvider client={qc}>
+        <MemoryRouter>
+          <Header />
+          <PhoneHeader />
+          <WalletView />
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+
+    expect(screen.getByRole("button", { name: "Get 100 test credits (play)" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: /0x11\.\.11/ }));
+    expect(screen.getByRole("button", { name: "Add 100 test credits (play)" })).toBeTruthy();
+    expect(screen.queryByText(/dev top-up button/i)).toBeNull();
+    unmount();
+
+    const fetchSpy = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(new Response("{}", { status: 200 }));
+    const { result } = renderHook(() => useWalletSession());
+    await act(async () => {
+      await result.current.handleDevTopUp();
+    });
+    expect(fetchSpy).toHaveBeenCalledWith(
+      expect.stringMatching(/\/api\/payment\/debug\/deposit$/),
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({ amount: 100 }),
+      }),
+    );
   });
 });

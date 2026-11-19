@@ -3,7 +3,7 @@ import { ChevronDown } from "lucide-react";
 import toast from "react-hot-toast";
 import { Link } from "react-router-dom";
 import { baseSepolia } from "../config/chains";
-import { isDevMode } from "../config/dev";
+import { isDevMode, isTopUpEnabled } from "../config/dev";
 import { BellPill } from "../pages/BellPill";
 import { THEME } from "../ui/theme";
 import { getExplorerAddressUrl } from "../utils/chain";
@@ -61,7 +61,7 @@ function AccountMenu({
               Explorer
             </a>
           </div>
-          {import.meta.env.DEV && isDevMode() ? (
+          {isTopUpEnabled() ? (
             <button
               type="button"
               disabled={isFunding}
@@ -72,7 +72,11 @@ function AccountMenu({
               className="w-full border-b px-3 py-2 text-left text-xs font-bold disabled:opacity-50"
               style={{ borderColor: "rgba(29, 27, 24, 0.15)", color: THEME.ink }}
             >
-              {isFunding ? "Funding..." : "Add 100 test credits"}
+              {isFunding
+                ? "Funding..."
+                : isDevMode()
+                  ? "Add 100 test credits"
+                  : "Add 100 test credits (play)"}
             </button>
           ) : null}
           <button

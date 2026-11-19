@@ -3,7 +3,7 @@ import { ChevronDown } from "lucide-react";
 import toast from "react-hot-toast";
 import { Link, useLocation } from "react-router-dom";
 import { baseSepolia } from "../config/chains";
-import { isDevMode } from "../config/dev";
+import { isDevMode, isTopUpEnabled } from "../config/dev";
 import { THEME } from "../ui/theme";
 import { getExplorerAddressUrl } from "../utils/chain";
 import { useWalletSession } from "./useWalletSession";
@@ -138,12 +138,14 @@ export const Header: React.FC<HeaderProps> = ({ bellSlot }) => {
             />
           ) : (
             <>
-              {import.meta.env.DEV && isDevMode() ? (
+              {isTopUpEnabled() ? (
                 <HeaderButton
                   label={
                     session.isFunding
                       ? "Funding..."
-                      : "Get 100 test credits (dev)"
+                      : isDevMode()
+                        ? "Get 100 test credits (dev)"
+                        : "Get 100 test credits (play)"
                   }
                   onClick={() => void session.handleDevTopUp()}
                   disabled={session.isFunding}

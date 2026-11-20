@@ -127,7 +127,7 @@ export const Header: React.FC<HeaderProps> = ({ bellSlot }) => {
             <HeaderButton label={session.isFunding ? "Funding..." : isDevMode() ? "Get 100 test credits (dev)" : "Get 100 test credits (play)"} onClick={() => void session.handleDevTopUp()} disabled={session.isFunding} />
           ) : null}
           <HeaderButton label={session.isConnected ? `${session.address?.slice(0, 6)}...${session.address?.slice(-4)}` : "Connect wallet"} onClick={() => setWalletMenuOpen(true)} variant={session.isConnected ? "secondary" : "primary"} />
-          <WalletDialog open={walletMenuOpen} onClose={() => setWalletMenuOpen(false)} address={session.address} network={session.chain?.name} onDisconnect={session.handleDisconnect} />
+          <WalletDialog open={walletMenuOpen} onClose={() => setWalletMenuOpen(false)} address={session.address} network={session.chain?.name ?? (session.chainId === 8453 ? "Base" : session.chainId ? `Chain ${session.chainId}` : undefined)} chainId={session.chainId ?? session.chain?.id} onDisconnect={session.handleDisconnect} />
         </div>
       </div>
     </header>

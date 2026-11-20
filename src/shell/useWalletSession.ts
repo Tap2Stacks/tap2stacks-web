@@ -73,7 +73,7 @@ export function useWalletSession() {
   const balance = useGameStore((s) => s.balance);
   const displayedBalance = useBalanceDisplay(balance);
   const updateBalance = useGameStore((s) => s.updateBalance);
-  const { address, isConnected, chain } = useAccount();
+  const { address, isConnected, chain, chainId } = useAccount();
   const { disconnect } = useDisconnect();
   const { signMessageAsync } = useSignMessage();
   const { switchChain, isPending: isPendingSwitch } = useSwitchChain();
@@ -175,6 +175,7 @@ export function useWalletSession() {
     address,
     isConnected,
     chain,
+    chainId,
     token,
     displayedBalance,
     isFunding,

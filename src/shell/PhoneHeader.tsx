@@ -19,7 +19,7 @@ function AccountControl(s: ReturnType<typeof useWalletSession>) {
     <button type="button" onClick={() => setOpen(true)} className="h-7 shrink-0 rounded-lg px-2 text-[11px] font-bold" style={{ background: s.isConnected ? THEME.paper : THEME.highlight, border: `1.5px solid ${THEME.ink}` }}>
       {s.isConnected ? `${s.address?.slice(0, 4)}..${s.address?.slice(-2)}` : "Connect"}
     </button>
-    <WalletDialog open={open} onClose={() => setOpen(false)} address={s.address} network={s.chain?.name} onDisconnect={s.handleDisconnect} onTopUp={s.token && isTopUpEnabled() ? () => void s.handleDevTopUp() : undefined} isFunding={s.isFunding} />
+    <WalletDialog open={open} onClose={() => setOpen(false)} address={s.address} network={s.chain?.name ?? (s.chainId === 8453 ? "Base" : s.chainId ? `Chain ${s.chainId}` : undefined)} chainId={s.chainId ?? s.chain?.id} onDisconnect={s.handleDisconnect} onTopUp={s.token && isTopUpEnabled() ? () => void s.handleDevTopUp() : undefined} isFunding={s.isFunding} />
   </>;
 }
 

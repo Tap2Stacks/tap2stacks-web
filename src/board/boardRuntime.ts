@@ -106,7 +106,7 @@ export class BoardRuntime {
         const smoothed = this.drawn.sample(points, now, live, perf, !!this.reduced?.matches);
         const line = smoothed.map(p => ({x: timeToX(v, p.ts), y: priceToY(v, p.price)}));
         const cells = visibleCells(state.cells, state.ticker, v);
-        drawBoard(this.ctx, { viewport: v, cells, line, livePrice: live, stacks: state.stacks, flash: this.flash() ? {...this.flash()!, untilMs: this.flash()!.untilMs + state.serverTimeOffset} : undefined, animationNowMs: Date.now(), reducedMotion: !!this.reduced?.matches });
+        drawBoard(this.ctx, { viewport: v, cells, line, livePrice: live, priceStep: state.modePriceStep, stacks: state.stacks, flash: this.flash() ? {...this.flash()!, untilMs: this.flash()!.untilMs + state.serverTimeOffset} : undefined, animationNowMs: Date.now(), reducedMotion: !!this.reduced?.matches });
         this.previous = next;
         this.dirty = false;
         this.lastCells = state.cells;

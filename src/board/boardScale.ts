@@ -13,6 +13,6 @@ export function boardScale(
   }
   return {
     nowFraction: 0.2,
-    visibleRows: Math.max(10, Math.floor(height / 36)),
+    visibleRows: Math.max(1, Math.floor(height / 36)),
   };
 }

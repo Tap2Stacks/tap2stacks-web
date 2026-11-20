@@ -20,7 +20,7 @@ describe("boardScale", () => {
     expect(rowHeight).toBeGreaterThanOrEqual(36);
   });
 
-  it("floors visibleRows at 10 on short phone heights", () => {
-    expect(boardScale(390, 300, true).visibleRows).toBe(10);
+  it("keeps rows tall on short phone heights", () => {
+    expect(boardScale(390, 300, true).visibleRows).toBe(8);
   });
 });

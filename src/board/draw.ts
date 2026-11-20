@@ -25,7 +25,8 @@ function drawCell(ctx: CanvasRenderingContext2D, cell: CellData, v: BoardViewpor
     const r = cellRect(v, bounds(cell));
     if (r.x + r.w < 0 || r.x > v.width || r.y + r.h < 0 || r.y > v.height)
         return;
-    const locked = isLocked(cell.timeWindowStart, v.nowMs);
+    const past = cell.timeWindowEnd <= v.nowMs || cell.status === 'past';
+    const locked = past || isLocked(cell.timeWindowStart, v.nowMs);
     const heat = heatFor(cell.multiplier);
     ctx.globalAlpha = locked ? .3 : 1;
     ctx.fillStyle = locked || heat === 'none' ? THEME.paper : THEME[heat];
@@ -33,11 +34,13 @@ function drawCell(ctx: CanvasRenderingContext2D, cell: CellData, v: BoardViewpor
     ctx.strokeStyle = THEME.ink;
     ctx.lineWidth = .5;
     ctx.strokeRect(r.x, r.y, r.w, r.h);
-    ctx.fillStyle = THEME.ink;
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.font = `${cell.multiplier >= 16 ? '700' : '400'} 12px ${THEME.font}`;
-    ctx.fillText(`x${cell.multiplier.toFixed(1)}`, r.x + r.w / 2, r.y + r.h / 2);
+    if (!past) {
+        ctx.fillStyle = THEME.ink;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.font = `${cell.multiplier >= 16 ? '700' : '400'} 12px ${THEME.font}`;
+        ctx.fillText(`x${cell.multiplier.toFixed(1)}`, r.x + r.w / 2, r.y + r.h / 2);
+    }
     ctx.globalAlpha = 1;
 }
 function curve(ctx: CanvasRenderingContext2D, line: Pt[]) {

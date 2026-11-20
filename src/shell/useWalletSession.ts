@@ -2,7 +2,6 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import toast from "react-hot-toast";
 import {
   useAccount,
-  useConnect,
   useDisconnect,
   useSignMessage,
   useSwitchChain,
@@ -75,7 +74,6 @@ export function useWalletSession() {
   const displayedBalance = useBalanceDisplay(balance);
   const updateBalance = useGameStore((s) => s.updateBalance);
   const { address, isConnected, chain } = useAccount();
-  const { connect, connectors } = useConnect();
   const { disconnect } = useDisconnect();
   const { signMessageAsync } = useSignMessage();
   const { switchChain, isPending: isPendingSwitch } = useSwitchChain();
@@ -180,7 +178,6 @@ export function useWalletSession() {
     token,
     displayedBalance,
     isFunding,
-    connectWallet: () => connect({ connector: connectors[0] }),
     switchToBaseSepolia: () => switchChain?.({ chainId: baseSepolia.id }),
     isPendingSwitch,
     promptLogin,

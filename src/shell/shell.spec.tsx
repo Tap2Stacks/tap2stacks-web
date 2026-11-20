@@ -124,6 +124,12 @@ describe("shell (Header, Layout, THEME)", () => {
     ).toBeTruthy();
   });
 
+  it("opens the wallet picker from the header", () => {
+    renderShell(<Header />);
+    fireEvent.click(screen.getByRole("button", { name: "Connect wallet" }));
+    expect(screen.getByRole("dialog", { name: "Connect wallet" })).toBeTruthy();
+  });
+
   it("Header renders bellSlot when provided", () => {
     renderShell(<Header bellSlot={<span>Opening Bell live</span>} />);
     expect(screen.getByText("Opening Bell live")).toBeTruthy();

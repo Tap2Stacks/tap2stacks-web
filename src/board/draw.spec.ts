@@ -41,6 +41,25 @@ describe('drawBoard', () => {
         expect(calls.some(c => c.name === 'fillText' && c.args[0] === 'x4.1')).toBe(false);
         expect(calls.some(c => c.name === 'fillText' && c.args[0] === 'Refunded')).toBe(true);
     });
+    it('fades far and high-multiplier cells smoothly while keeping heat tints visible', () => {
+        const { ctx, calls } = recordingContext();
+        const nearCell = testCell({ id: 'near', multiplier: 3.2, timeWindowStart: 15000, timeWindowEnd: 20000 });
+        const farCell = testCell({
+            id: 'far',
+            multiplier: 20,
+            timeWindowStart: 40000,
+            timeWindowEnd: 45000,
+            original: { ...testCell().original, startTs: 40000, endTs: 45000, lowerPrice: '155.24', upperPrice: '155.27', rewardRate: '20' },
+        });
+        drawBoard(ctx, { ...scene, livePrice: 155.015, cells: [nearCell, farCell] });
+        const nearText = calls.find(c => c.name === 'fillText' && c.args[0] === 'x3.2');
+        const farText = calls.find(c => c.name === 'fillText' && c.args[0] === 'x20.0');
+        const farFill = calls.find(c => c.name === 'fillRect' && c.fill === '#F7CFC8');
+        expect(nearText!.alpha).toBeGreaterThan(farText!.alpha);
+        expect(farText!.alpha).toBeGreaterThanOrEqual(0.28);
+        expect(farFill!.alpha).toBeGreaterThan(farText!.alpha);
+        expect(farFill!.alpha).toBeLessThan(1);
+    });
 });
 it('drawStack draws a count badge x3 and the total $15', () => { const { ctx, calls } = recordingContext(); drawBoard(ctx, { ...scene, stacks: { [scene.cells[0].id]: { cellId: scene.cells[0].id, ticker: 'NVDA', coins: ['a', 'b', 'c'].map(clientTapId => ({ clientTapId, amount: 5, rate: 4.1, status: 'open', placedAt: 0 })) } } }); expect(calls.some(c => c.args[0] === 'x3')).toBe(true); expect(calls.some(c => c.args[0] === '$15')).toBe(true); });
 it('animates settlements in local time despite server clock offset and fades pending additions',()=>{

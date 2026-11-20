@@ -3,6 +3,8 @@ import { THEME } from '../ui/theme';
 import { monotoneSegments, type Pt } from './curve';
 import { cellRect, isLocked, priceToY, type BoardViewport } from './layout';
 import { heatFor } from './heat';
+import { cellFade } from './fade';
+import { formatBoardPrice } from './priceFormat';
 import { stackTotals } from './stacks';
 import type { CoinStack } from './types';
 export interface BoardScene {
@@ -10,6 +12,7 @@ export interface BoardScene {
     cells: CellData[];
     line: Pt[];
     livePrice: number;
+    priceStep?: number;
     stacks: Record<string, CoinStack>;
     reducedMotion?: boolean;
     animationNowMs?: number;
@@ -21,20 +24,34 @@ export interface BoardScene {
 export function bounds(cell: CellData) {
     return { startTs: cell.timeWindowStart, endTs: cell.timeWindowEnd, lower: Number(cell.original.lowerPrice), upper: Number(cell.original.upperPrice) };
 }
-function drawCell(ctx: CanvasRenderingContext2D, cell: CellData, v: BoardViewport) {
+function drawCell(ctx: CanvasRenderingContext2D, cell: CellData, v: BoardViewport, livePrice: number) {
     const r = cellRect(v, bounds(cell));
     if (r.x + r.w < 0 || r.x > v.width || r.y + r.h < 0 || r.y > v.height)
         return;
     const past = cell.timeWindowEnd <= v.nowMs || cell.status === 'past';
     const locked = past || isLocked(cell.timeWindowStart, v.nowMs);
     const heat = heatFor(cell.multiplier);
-    ctx.globalAlpha = locked ? .3 : 1;
+    const visibleAheadMs = Math.max(0, v.width * (1 - v.nowFraction) * v.msPerPx);
+    const fade = locked
+        ? { textAlpha: .3, tintAlpha: .3 }
+        : cellFade({
+            multiplier: cell.multiplier,
+            cellLower: Number(cell.original.lowerPrice),
+            cellUpper: Number(cell.original.upperPrice),
+            livePrice: livePrice > 0 ? livePrice : v.centerPrice,
+            startTs: cell.timeWindowStart,
+            endTs: cell.timeWindowEnd,
+            nowMs: v.nowMs,
+            visibleAheadMs,
+        });
+    ctx.globalAlpha = fade.tintAlpha;
     ctx.fillStyle = locked || heat === 'none' ? THEME.paper : THEME[heat];
     ctx.fillRect(r.x + 1, r.y + 1, r.w - 2, r.h - 2);
     ctx.strokeStyle = THEME.ink;
     ctx.lineWidth = .5;
     ctx.strokeRect(r.x, r.y, r.w, r.h);
     if (!past) {
+        ctx.globalAlpha = fade.textAlpha;
         ctx.fillStyle = THEME.ink;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
@@ -73,6 +90,7 @@ function rowGuides(
   ctx: CanvasRenderingContext2D,
   cells: CellData[],
   v: BoardViewport,
+  step: number,
 ): void {
   const prices = new Set(
     cells.flatMap((cell) => [
@@ -88,6 +106,17 @@ function rowGuides(
       ctx.fillRect(0, y, v.width, 0.5);
     }
   }
+  ctx.globalAlpha = 0.65;
+  ctx.font = `10px ${THEME.font}`;
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'middle';
+  let lastY = -Infinity;
+  for (const price of [...prices].sort((a, b) => b - a)) {
+    const y = priceToY(v, price);
+    if (y < 8 || y > v.height - 8 || y - lastY < 28) continue;
+    ctx.fillText(formatBoardPrice(price, step), 4, y);
+    lastY = y;
+  }
   ctx.globalAlpha = 1;
 }
 export function drawBoard(ctx: CanvasRenderingContext2D, scene: BoardScene): void {
@@ -96,9 +125,9 @@ export function drawBoard(ctx: CanvasRenderingContext2D, scene: BoardScene): voi
     ctx.globalAlpha = 1;
     ctx.fillStyle = THEME.paper;
     ctx.fillRect(0, 0, v.width, v.height);
-    rowGuides(ctx, scene.cells, v);
+    rowGuides(ctx, scene.cells, v, scene.priceStep ?? .01);
     for (const cell of scene.cells) {
-        drawCell(ctx, cell, v);
+        drawCell(ctx, cell, v, scene.livePrice);
         const stack = scene.stacks[cell.id];
         if (stack)
             drawStack(ctx, stack, cellRect(v, bounds(cell)), scene.animationNowMs ?? v.nowMs, scene.reducedMotion);
@@ -127,7 +156,7 @@ export function drawBoard(ctx: CanvasRenderingContext2D, scene: BoardScene): voi
         ctx.font = `12px ${THEME.font}`;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        ctx.fillText(scene.livePrice.toFixed(2), v.width - 39, y);
+        ctx.fillText(formatBoardPrice(scene.livePrice, scene.priceStep ?? .01), v.width - 39, y);
     }
     ctx.restore();
 }

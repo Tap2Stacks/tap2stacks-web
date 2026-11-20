@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { AssetLogo } from "../components/AssetLogo";
 import { baseSepolia } from "../config/chains";
-import { isDevMode, isTopUpEnabled } from "../config/dev";
+import { isDevMode, isPreviewTopUpEnabled, isTopUpEnabled } from "../config/dev";
 import { THEME } from "../ui/theme";
 import { WalletDialog } from "../wallet/WalletDialog";
 import { useWalletSession } from "./useWalletSession";
@@ -115,6 +115,7 @@ export const Header: React.FC<HeaderProps> = ({ bellSlot }) => {
             }}
           >
             <AssetLogo symbol="USDC" size={14} />
+            <span>{isPreviewTopUpEnabled() ? "PLAY MONEY" : "TEST USDC"}</span>
             <span>${session.displayedBalance.toFixed(2)}</span>
           </div>
 

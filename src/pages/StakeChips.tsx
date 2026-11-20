@@ -37,7 +37,7 @@ export function StakeChips({
   return (
     <div
       aria-label="Stake chips"
-      className={`flex ${compact ? "w-full justify-around px-3 py-1" : "gap-3"} ${shake ? "fx-shake" : ""}`}
+      className={`flex ${compact ? "min-w-0 flex-1 justify-around px-1 py-1" : "gap-3"} ${shake ? "fx-shake" : ""}`}
     >
       {stakes.map((stake, i) => (
         <button
@@ -45,7 +45,7 @@ export function StakeChips({
           aria-label={`Stake $${stake}`}
           aria-pressed={amount === stake}
           onClick={() => select(stake)}
-          className={`relative cursor-pointer rounded-full border-2 font-bold ${compact ? "h-12 w-12 text-xs" : "h-14 w-14"}`}
+          className={`relative cursor-pointer rounded-full border-2 font-bold ${compact ? "h-11 w-11 text-xs" : "h-14 w-14"}`}
           style={{
             borderColor: THEME.ink,
             background: `linear-gradient(${THEME.coinLight},${THEME.coinDark})`,

@@ -56,6 +56,8 @@ describe("phone trade page", () => {
   afterEach(() => {
     cleanup();
     vi.clearAllMocks();
+    vi.unstubAllEnvs();
+    localStorage.clear();
   });
 
   it("at 390 px renders ticker row, board, open-taps line, chips, and testnet line in order without desktop SidePanel", () => {
@@ -81,6 +83,24 @@ describe("phone trade page", () => {
       expect(relation & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     }
     expect(container.querySelector("aside")).toBeNull();
+  });
+
+  it("keeps the play balance and stake controls together outside the board", () => {
+    setWidth(375);
+    vi.stubEnv("VITE_PREVIEW_TOPUP", "true");
+    render(<TradePage />);
+    const controls = screen.getByLabelText("Balance and stake");
+    expect(controls.textContent).toContain("PLAY MONEY");
+    expect(controls.textContent).toContain("$100.00");
+    expect(controls.contains(screen.getByLabelText("Stake chips"))).toBe(true);
+    expect(screen.getByLabelText("Trading board").contains(controls)).toBe(false);
+  });
+
+  it("labels the configured testnet balance without calling it live money", () => {
+    setWidth(375);
+    vi.stubEnv("VITE_PREVIEW_TOPUP", "false");
+    render(<TradePage />);
+    expect(screen.getByLabelText("Balance and stake").textContent).toContain("TEST USDC");
   });
 
   it("open-taps line shows '2 open taps / $6 on the board' and expands to the list on tap", () => {

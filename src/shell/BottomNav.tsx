@@ -13,12 +13,12 @@ export function BottomNav() {
   return (
     <nav
       aria-label="Mobile navigation"
-      className="flex shrink-0 items-center justify-around border-t pt-2.5 text-[11px]"
+      className="flex shrink-0 items-center border-t text-[11px]"
       style={{
         backgroundColor: THEME.paper,
         color: THEME.ink,
         borderColor: "rgba(29, 27, 24, 0.15)",
-        paddingBottom: "calc(0.625rem + env(safe-area-inset-bottom))",
+        paddingBottom: "env(safe-area-inset-bottom)",
       }}
     >
       {NAV_ITEMS.map((item) => {
@@ -31,8 +31,8 @@ export function BottomNav() {
             aria-current={active ? "page" : undefined}
             className={
               active
-                ? "font-extrabold underline underline-offset-4 opacity-100"
-                : "font-medium opacity-60"
+                ? "flex min-h-11 flex-1 items-center justify-center font-extrabold underline underline-offset-4 opacity-100"
+                : "flex min-h-11 flex-1 items-center justify-center font-medium opacity-70"
             }
           >
             {item.label}

@@ -1,4 +1,5 @@
 import type { CoinStack } from "../board/types";
+import { AssetLogo } from "../components/AssetLogo";
 import { useOpenStacksSummary } from "./useOpenStacks";
 
 function StackRow({ stack }: { stack: CoinStack }) {
@@ -16,9 +17,12 @@ function StackRow({ stack }: { stack: CoinStack }) {
       : `Cell ${stack.cellId}`;
   return (
     <li className="rounded border p-3 text-xs">
-      <div className="mb-1 font-bold">
-        {stack.ticker} · {stack.coins.length}{" "}
-        {stack.coins.length === 1 ? "coin" : "coins"}
+      <div className="mb-1 flex items-center gap-1.5 font-bold">
+        <AssetLogo symbol={stack.ticker} size={14} />
+        <span>
+          {stack.ticker} · {stack.coins.length}{" "}
+          {stack.coins.length === 1 ? "coin" : "coins"}
+        </span>
       </div>
       <div>
         ${total} · x{rate.toFixed(1)}

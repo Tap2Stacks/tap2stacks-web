@@ -86,13 +86,16 @@ describe("other pages and dialogs at phone width (390 px)", () => {
     expect(screen.getByRole("heading", { name: "Execution Journal" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Refresh" })).toBeTruthy();
     expect(await screen.findByText(/ord-phone-1/i)).toBeTruthy();
+    expect(container.querySelector('img[data-symbol="NVDA"]')).toBeTruthy();
     expect(container.innerHTML).toContain("overflow-x-auto");
   });
 
   it("WalletView renders heading and primary Deposit button", () => {
-    render(<WalletView />);
+    const { container } = render(<WalletView />);
     expect(screen.getByRole("heading", { name: "Wallet" })).toBeTruthy();
     expect(screen.getByRole("button", { name: /Deposit tUSDC/i })).toBeTruthy();
+    expect(container.querySelector('img[data-symbol="Base"]')).toBeTruthy();
+    expect(container.querySelector('img[data-symbol="tUSDC"]')).toBeTruthy();
   });
 
   it("ProofsView renders heading, Refresh button, and overflow-x-auto wrapper", async () => {

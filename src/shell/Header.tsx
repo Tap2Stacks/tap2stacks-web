@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { ChevronDown } from "lucide-react";
 import toast from "react-hot-toast";
 import { Link, useLocation } from "react-router-dom";
+import { AssetLogo } from "../components/AssetLogo";
 import { baseSepolia } from "../config/chains";
 import { isDevMode, isTopUpEnabled } from "../config/dev";
 import { THEME } from "../ui/theme";
@@ -108,14 +109,15 @@ export const Header: React.FC<HeaderProps> = ({ bellSlot }) => {
 
           <div
             data-testid="balance-pill"
-            className="rounded-lg px-2.5 py-1 text-xs font-bold tabular-nums"
+            className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-bold tabular-nums"
             style={{
               backgroundColor: THEME.ink,
               color: THEME.paper,
               border: `1.5px solid ${THEME.ink}`,
             }}
           >
-            ${session.displayedBalance.toFixed(2)}
+            <AssetLogo symbol="USDC" size={14} />
+            <span>${session.displayedBalance.toFixed(2)}</span>
           </div>
 
           {!session.isConnected ? (

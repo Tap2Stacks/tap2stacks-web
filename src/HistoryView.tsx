@@ -1,5 +1,6 @@
 import React from "react";
 import { ChevronLeft, ChevronRight, Loader2, RefreshCw, ScrollText, ShieldCheck } from "lucide-react";
+import { AssetLogo } from "./components/AssetLogo";
 import { THEME } from "./ui/theme";
 import {
   cn, formatDate, formatMoney, getOrderProofKeys, isOrderSettled,
@@ -256,9 +257,12 @@ export const HistoryView: React.FC = () => {
                           <p className="text-[10px] uppercase tracking-[0.16em] text-ink/65">
                             Market
                           </p>
-                          <p className="mt-1 text-sm font-semibold text-ink">
-                            {order.marketId || "BTCUSDT"}
-                          </p>
+                          <div className="mt-1 flex items-center gap-1.5">
+                            <AssetLogo symbol={order.marketId || "BTCUSDT"} size={16} />
+                            <p className="text-sm font-semibold text-ink">
+                              {order.marketId || "BTCUSDT"}
+                            </p>
+                          </div>
                         </div>
 
                         <div>

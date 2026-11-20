@@ -1,5 +1,6 @@
 import React from "react";
 import { ArrowDownUp, CircleDollarSign, Coins, Droplets, RefreshCw, ShieldCheck, Wallet } from "lucide-react";
+import { AssetLogo } from "./components/AssetLogo";
 import { baseSepolia } from "./config/chains";
 import { isDevMode } from "./config/dev";
 import { ActionButton, StatCard } from "./pages/WalletCards";
@@ -54,7 +55,10 @@ function WalletOverview({
               <Icon size={14} className="text-ink" />
               {label}
             </span>
-            <span className="text-xs font-semibold text-ink">{value}</span>
+            <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-ink">
+              {label === "Network" && chainName ? <AssetLogo symbol={chainName} size={14} /> : null}
+              <span>{value}</span>
+            </span>
           </div>
         ))}
       </div>
@@ -143,8 +147,8 @@ function TransferAmountBox(w: ReturnType<typeof useWallet>) {
           placeholder="0"
           className="min-w-0 flex-1 bg-transparent text-left text-3xl font-semibold tracking-tight text-ink outline-none placeholder:text-ink/40"
         />
-        <span className="inline-flex items-center gap-1 rounded-md border px-2 py-1 text-xs font-semibold" style={{ borderColor: THEME.ink, background: THEME.yellow }}>
-          <Coins size={13} className="text-ink" />
+        <span className="inline-flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs font-semibold" style={{ borderColor: THEME.ink, background: THEME.yellow }}>
+          <AssetLogo symbol={TOKEN_SYMBOL} size={14} />
           {TOKEN_SYMBOL}
         </span>
       </div>
@@ -238,7 +242,8 @@ export const WalletView: React.FC = () => {
           </div>
         </div>
         <div className="flex items-center gap-2 text-xs text-ink/70">
-          <span className="rounded-md border px-2.5 py-1.5" style={{ borderColor: THEME.ink, background: THEME.yellow }}>
+          <span className="inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1.5" style={{ borderColor: THEME.ink, background: THEME.yellow }}>
+            <AssetLogo symbol="Base" size={14} />
             {baseSepolia.name}
           </span>
           <button

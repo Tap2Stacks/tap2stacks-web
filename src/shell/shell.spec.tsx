@@ -118,6 +118,7 @@ describe("shell (Header, Layout, THEME)", () => {
       screen.getByRole("link", { name: "Proofs" }).getAttribute("href"),
     ).toBe("/proofs");
     expect(screen.getByText("$0.00")).toBeTruthy();
+    expect(screen.getByTestId("balance-pill").querySelector('img[data-symbol="USDC"]')).toBeTruthy();
     expect(
       screen.getByRole("button", { name: "Connect wallet" }),
     ).toBeTruthy();

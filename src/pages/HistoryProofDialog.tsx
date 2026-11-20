@@ -1,5 +1,6 @@
 import { Dialog, DialogPanel } from "@headlessui/react";
 import { CheckCircle2, ExternalLink, Loader2, X, XCircle } from "lucide-react";
+import { AssetLogo } from "../components/AssetLogo";
 import { BACKEND_URL } from "../constant";
 import { THEME } from "../ui/theme";
 import { getExplorerAddressUrl, getExplorerTxUrl } from "../utils/chain";
@@ -63,8 +64,9 @@ function ProofDetails({ proofData }: { proofData: OrderProof }) {
         >
           {badge.label}
         </span>
-        <span className="font-mono text-xs text-ink">
-          Batch #{proofData.batch.index}
+        <span className="inline-flex items-center gap-1.5 font-mono text-xs text-ink">
+          <AssetLogo symbol={proofData.tap.ticker} size={14} />
+          <span>{proofData.tap.ticker} · Batch #{proofData.batch.index}</span>
         </span>
       </div>
 

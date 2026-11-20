@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { ChevronDown } from "lucide-react";
 import toast from "react-hot-toast";
 import { Link } from "react-router-dom";
+import { AssetLogo } from "../components/AssetLogo";
 import { baseSepolia } from "../config/chains";
 import { isDevMode, isTopUpEnabled } from "../config/dev";
 import { BellPill } from "../pages/BellPill";
@@ -169,10 +170,11 @@ export const PhoneHeader: React.FC<{ bellSlot?: React.ReactNode }> = ({ bellSlot
           <div className="shrink-0">{bellSlot ?? <BellPill compact />}</div>
           <div
             data-testid="balance-pill"
-            className="shrink-0 rounded-lg px-1.5 py-0.5 text-[11px] font-bold tabular-nums"
+            className="inline-flex shrink-0 items-center gap-1 rounded-lg px-1.5 py-0.5 text-[11px] font-bold tabular-nums"
             style={{ backgroundColor: THEME.ink, color: THEME.paper }}
           >
-            ${session.displayedBalance.toFixed(2)}
+            <AssetLogo symbol="USDC" size={12} />
+            <span>${session.displayedBalance.toFixed(2)}</span>
           </div>
           <AccountControl {...session} />
         </div>

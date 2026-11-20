@@ -1,3 +1,4 @@
+import { AssetLogo } from "../components/AssetLogo";
 import { useGameStore } from "../store";
 import { formatChange } from "../lib/openingBell";
 import { THEME } from "../ui/theme";
@@ -22,13 +23,14 @@ export function TickerRow({ compact = false }: { compact?: boolean }) {
               type="button"
               aria-pressed={t === ticker}
               onClick={() => useGameStore.getState().setTicker(t)}
-              className="cursor-pointer px-2 py-1 font-bold"
+              className="inline-flex cursor-pointer items-center gap-1 px-2 py-1 font-bold"
               style={{
                 background: t === ticker ? THEME.ink : THEME.paper,
                 color: t === ticker ? THEME.paper : THEME.ink,
               }}
             >
-              {t}
+              <AssetLogo symbol={t} size={13} />
+              <span>{t}</span>
             </button>
           ))}
         </div>
@@ -64,13 +66,14 @@ export function TickerRow({ compact = false }: { compact?: boolean }) {
               key={t}
               aria-pressed={t === ticker}
               onClick={() => useGameStore.getState().setTicker(t)}
-              className="cursor-pointer rounded border px-3 py-2 text-sm font-bold"
+              className="inline-flex cursor-pointer items-center gap-1.5 rounded border px-3 py-2 text-sm font-bold"
               style={{
                 background: t === ticker ? THEME.ink : THEME.paper,
                 color: t === ticker ? THEME.paper : THEME.ink,
               }}
             >
-              {t}
+              <AssetLogo symbol={t} size={16} />
+              <span>{t}</span>
             </button>
           ))}
         </div>

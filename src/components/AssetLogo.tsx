@@ -61,7 +61,7 @@ export function AssetLogo({
         data-symbol={symbol}
         width={size}
         height={size}
-        className={`inline-block shrink-0 rounded-full object-contain ${className}`.trim()}
+        className={`inline-block shrink-0 object-contain ${className}`.trim()}
         style={{ width: size, height: size }}
       />
     );

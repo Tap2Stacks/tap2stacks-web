@@ -1,5 +1,5 @@
 import { useGameStore, type CellData } from '../store';
-import { bounds, drawBoard, type BoardScene } from './draw';
+import { bounds, drawBoard, SETTLEMENT_DURATION_MS, type BoardScene } from './draw';
 import { createChartClock } from './clock';
 import { createSmoothValue } from './smooth';
 import { cellRect, priceToY, timeToX, type BoardViewport } from './layout';
@@ -100,7 +100,7 @@ export class BoardRuntime {
     private draw(state: State, now: number, perf: number) {
         const { v, live, target, points } = this.prepare(state, now, perf);
         const next = { pricePx: priceToY(v, live), second: Math.floor(now / 1000), timePx: now / v.msPerPx };
-        const animating = Object.values(state.stacks).some(s => s.ticker === state.ticker && s.coins.some(c => Date.now() - (c.updatedAt ?? c.placedAt) < 650));
+        const animating = Object.values(state.stacks).some(s => s.ticker === state.ticker && s.coins.some(c => Date.now() - (c.updatedAt ?? c.placedAt) < SETTLEMENT_DURATION_MS + 50));
         if (!this.dirty && this.lastCells === state.cells && this.lastStacks === state.stacks && this.previous && !shouldRedraw(this.previous, next) && Math.abs(live - target) < .000001 && !animating && !this.flash())
             return;
         const smoothed = this.drawn.sample(points, now, live, perf, !!this.reduced?.matches);

@@ -41,7 +41,7 @@ it("the live column under the dot is drawn, and a locked stack stays visible unt
     calls.length = 0;
     drawBoard(ctx, {
         viewport,
-        animationNowMs: 17650,
+        animationNowMs: 18250,
         cells: [cell],
         line: [],
         livePrice: 155,

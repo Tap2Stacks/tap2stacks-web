@@ -66,5 +66,32 @@ it('animates settlements in local time despite server clock offset and fades pen
  const {ctx,calls}=recordingContext();const cell=scene.cells[0];
  const coins=['a','b','c','d'].map((clientTapId,i)=>({clientTapId,amount:5,rate:4.1,status:i===3?'pending' as const:'open' as const,placedAt:10000}));
  drawBoard(ctx,{...scene,viewport:{...scene.viewport,nowMs:70000},animationNowMs:10100,stacks:{[cell.id]:{cellId:cell.id,ticker:'NVDA',coins}}});expect(calls.some(c=>c.name==='ellipse'&&c.alpha===.5)).toBe(true);
- calls.length=0;drawBoard(ctx,{...scene,viewport:{...scene.viewport,nowMs:70000},animationNowMs:10100,stacks:{[cell.id]:{cellId:cell.id,ticker:'NVDA',coins:coins.map(c=>({...c,status:'lost',updatedAt:10000}))}}});expect(calls.some(c=>c.args[0]==='$20')).toBe(true);
+ calls.length=0;drawBoard(ctx,{...scene,viewport:{...scene.viewport,nowMs:70000},animationNowMs:10100,stacks:{[cell.id]:{cellId:cell.id,ticker:'NVDA',coins:coins.map(c=>({...c,status:'lost',updatedAt:10000}))}}});expect(calls.some(c=>c.args[0]==='Missed')).toBe(true);
+});
+it('shows distinct outcomes on settled stacks without mislabeling mixed results', () => {
+ const cell = scene.cells[0];
+ for (const [statuses, expected] of [[['won'], 'Won'], [['lost'], 'Missed'], [['won', 'lost'], 'Settled']] as const) {
+  const { ctx, calls } = recordingContext();
+  drawBoard(ctx, { ...scene, animationNowMs: 10100, stacks: { [cell.id]: { cellId: cell.id, ticker: 'NVDA', coins: statuses.map((status, i) => ({ clientTapId: String(i), amount: 5, rate: 4.1, status, placedAt: 9000, updatedAt: 10000 })) } } });
+  expect(calls.some(c => c.name === 'fillText' && c.args[0] === expected)).toBe(true);
+ }
+});
+it('gives the live point a quiet pulse without moving its price and respects reduced motion', () => {
+ const animated = recordingContext();
+ drawBoard(animated.ctx, scene);
+ const still = recordingContext();
+ drawBoard(still.ctx, { ...scene, reducedMotion: true });
+ const animatedArcs = animated.calls.filter(c => c.name === 'arc');
+ const stillArcs = still.calls.filter(c => c.name === 'arc');
+ expect(animatedArcs).toHaveLength(stillArcs.length + 1);
+ expect(animatedArcs[0].args.slice(0, 2)).toEqual(stillArcs[0].args.slice(0, 2));
+});
+it('keeps a mixed stack visible from its latest settlement, regardless of coin order', () => {
+ const cell = scene.cells[0];
+ const { ctx, calls } = recordingContext();
+ drawBoard(ctx, { ...scene, animationNowMs: 10100, stacks: { [cell.id]: { cellId: cell.id, ticker: 'NVDA', coins: [
+  { clientTapId: 'a', amount: 5, rate: 4.1, status: 'won', placedAt: 1000, updatedAt: 10000 },
+  { clientTapId: 'b', amount: 5, rate: 4.1, status: 'lost', placedAt: 2000, updatedAt: 8000 },
+ ] } } });
+ expect(calls.some(c => c.name === 'fillText' && c.args[0] === 'Settled')).toBe(true);
 });

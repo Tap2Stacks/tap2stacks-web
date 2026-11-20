@@ -7,6 +7,7 @@ import { cellFade } from './fade';
 import { formatBoardPrice } from './priceFormat';
 import { stackTotals } from './stacks';
 import type { CoinStack } from './types';
+export const SETTLEMENT_DURATION_MS = 1200;
 export interface BoardScene {
     viewport: BoardViewport;
     cells: CellData[];
@@ -145,6 +146,17 @@ export function drawBoard(ctx: CanvasRenderingContext2D, scene: BoardScene): voi
         ctx.bezierCurveTo(x, y, v.width, y, v.width, y);
         ctx.stroke();
         ctx.setLineDash([]);
+        if (!scene.reducedMotion) {
+            const phase = (v.nowMs % 1600) / 1600;
+            ctx.save();
+            ctx.globalAlpha = .18 * (1 - phase);
+            ctx.strokeStyle = THEME.ink;
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.arc(x, y, 6 + phase * 5, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.restore();
+        }
         ctx.beginPath();
         ctx.arc(x, y, 4 + (scene.reducedMotion ? 0 : Math.sin(v.nowMs / 250) * .6), 0, Math.PI * 2);
         ctx.fillStyle = THEME.ink;
@@ -171,13 +183,14 @@ export function drawStack(ctx: CanvasRenderingContext2D, stack: CoinStack, r: {
     const age = Math.max(0, nowMs - newest.placedAt), progress = Math.min(1, age / 180);
     const drop = reducedMotion ? 0 : -12 * (1 - progress) * Math.cos(progress * Math.PI * 2);
     const terminal = coins.every(c => ['lost', 'void', 'won'].includes(c.status));
-    const terminalAge = Math.max(0, nowMs - (newest.updatedAt ?? newest.placedAt));
-    const fade = terminal ? Math.max(0, 1 - terminalAge / 600) : 1;
+    const terminalAt = Math.max(...coins.map(c => c.updatedAt ?? c.placedAt));
+    const terminalAge = Math.max(0, nowMs - terminalAt);
+    const fade = terminal ? Math.max(0, 1 - terminalAge / SETTLEMENT_DURATION_MS) : 1;
     if (fade === 0)
         return;
     ctx.save();
     ctx.globalAlpha = fade;
-    const refund = coins.every(c => c.status === 'void') && !reducedMotion ? Math.min(1, terminalAge / 600) : 0;
+    const refund = coins.every(c => c.status === 'void') && !reducedMotion ? Math.min(1, terminalAge / SETTLEMENT_DURATION_MS) : 0;
     const x = r.x + r.w / 2 + refund * 100, y = r.y + r.h / 2 + drop - refund * 60;
     const radius = Math.min(15, r.h * .34, r.w * .2);
     const gradient = ctx.createLinearGradient(x - radius, y - radius, x + radius, y + radius);
@@ -194,11 +207,14 @@ export function drawStack(ctx: CanvasRenderingContext2D, stack: CoinStack, r: {
         ctx.stroke();
     }
     ctx.globalAlpha = fade;
-    ctx.fillStyle = THEME.ink;
+    const outcome = !terminal ? null : coins.every(c => c.status === 'won') ? 'Won'
+        : coins.every(c => c.status === 'lost') ? 'Missed'
+        : coins.every(c => c.status === 'void') ? 'Refunded' : 'Settled';
+    ctx.fillStyle = outcome === 'Won' ? THEME.win : outcome === 'Missed' ? THEME.loss : THEME.ink;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.font = `700 11px ${THEME.font}`;
-    ctx.fillText(refund > 0 ? 'Refunded' : `$${totals.stake}`, x, y - 3);
+    ctx.font = `700 ${outcome ? 9 : 11}px ${THEME.font}`;
+    ctx.fillText(outcome ?? `$${totals.stake}`, x, y - 3);
     ctx.fillStyle = THEME.paper;
     ctx.fillRect(x + radius - 5, y - radius - 5, 25, 15);
     ctx.strokeRect(x + radius - 5, y - radius - 5, 25, 15);

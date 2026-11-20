@@ -32,9 +32,7 @@ function drawCell(ctx: CanvasRenderingContext2D, cell: CellData, v: BoardViewpor
     const locked = past || isLocked(cell.timeWindowStart, v.nowMs);
     const heat = heatFor(cell.multiplier);
     const visibleAheadMs = Math.max(0, v.width * (1 - v.nowFraction) * v.msPerPx);
-    const fade = locked
-        ? { textAlpha: .3, tintAlpha: .3 }
-        : cellFade({
+    const fade = cellFade({
             multiplier: cell.multiplier,
             cellLower: Number(cell.original.lowerPrice),
             cellUpper: Number(cell.original.upperPrice),
@@ -44,14 +42,14 @@ function drawCell(ctx: CanvasRenderingContext2D, cell: CellData, v: BoardViewpor
             nowMs: v.nowMs,
             visibleAheadMs,
         });
-    ctx.globalAlpha = fade.tintAlpha;
+    ctx.globalAlpha = locked ? .3 : fade.tintAlpha;
     ctx.fillStyle = locked || heat === 'none' ? THEME.paper : THEME[heat];
     ctx.fillRect(r.x + 1, r.y + 1, r.w - 2, r.h - 2);
     ctx.strokeStyle = THEME.ink;
     ctx.lineWidth = .5;
     ctx.strokeRect(r.x, r.y, r.w, r.h);
     if (!past) {
-        ctx.globalAlpha = fade.textAlpha;
+        ctx.globalAlpha = locked ? .3 : fade.textAlpha;
         ctx.fillStyle = THEME.ink;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
@@ -125,13 +123,13 @@ export function drawBoard(ctx: CanvasRenderingContext2D, scene: BoardScene): voi
     ctx.globalAlpha = 1;
     ctx.fillStyle = THEME.paper;
     ctx.fillRect(0, 0, v.width, v.height);
-    rowGuides(ctx, scene.cells, v, scene.priceStep ?? .01);
     for (const cell of scene.cells) {
         drawCell(ctx, cell, v, scene.livePrice);
         const stack = scene.stacks[cell.id];
         if (stack)
             drawStack(ctx, stack, cellRect(v, bounds(cell)), scene.animationNowMs ?? v.nowMs, scene.reducedMotion);
     }
+    rowGuides(ctx, scene.cells, v, scene.priceStep ?? .01);
     ctx.strokeStyle = THEME.ink;
     ctx.lineWidth = 2.5;
     ctx.lineJoin = 'round';

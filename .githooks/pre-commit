@@ -1,0 +1,9 @@
+#!/bin/sh
+# Every commit in the tap2stacks repos must be authored by nvq2309.
+want="nvq2309@gmail.com"
+email=$(git var GIT_AUTHOR_IDENT | sed -E 's/.*<([^>]*)>.*/\1/')
+if [ "$email" != "$want" ]; then
+  echo "Commit blocked: author must be nvq2309 <$want>, got <$email>." >&2
+  echo "Fix: git config user.name nvq2309 && git config user.email $want" >&2
+  exit 1
+fi

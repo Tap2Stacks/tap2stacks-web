@@ -1,0 +1,14 @@
+name: Commit author
+on: [push, pull_request]
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Every commit must be authored by nvq2309
+        run: |
+          bad=$(git log --format='%h %an <%ae>' HEAD | grep -v '<nvq2309@gmail.com>$' || true)
+          if [ -n "$bad" ]; then echo "Commits not authored by nvq2309:"; echo "$bad"; exit 1; fi

@@ -1,5 +1,6 @@
 import { createConnector } from "wagmi";
 import { getAddress, type Address, type EIP1193Provider } from "viem";
+import { withBuilderCodeProvider } from "../lib/builderCode";
 
 export interface EmailRuntime {
   provider: EIP1193Provider;
@@ -9,13 +10,16 @@ let activeRuntime: EmailRuntime | undefined;
 export function setEmailRuntime(runtime: EmailRuntime | undefined) { activeRuntime = runtime; }
 export function getEmailRuntime() { return activeRuntime; }
 
-export function emailConnector(getRuntime: () => EmailRuntime | undefined = getEmailRuntime) {
+export function emailConnector(
+  getRuntime: () => EmailRuntime | undefined = getEmailRuntime,
+  getBuilderCode: () => string | undefined = () => import.meta.env.VITE_BASE_BUILDER_CODE,
+) {
   return createConnector((config) => {
     let provider: EIP1193Provider | undefined;
     const requireProvider = () => {
       const runtime = getRuntime();
       if (!runtime) throw new Error("Email wallet is not ready");
-      return runtime.provider;
+      return withBuilderCodeProvider(runtime.provider, getBuilderCode);
     };
     const onAccountsChanged = (accounts: string[]) => {
       if (!accounts.length) config.emitter.emit("disconnect");

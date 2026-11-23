@@ -34,6 +34,10 @@ export const Layout: React.FC<LayoutProps> = ({ runningBar, bellSlot }) => {
         backgroundColor: THEME.paper,
         color: THEME.ink,
         fontFamily: THEME.font,
+        paddingTop: "env(safe-area-inset-top)",
+        paddingLeft: "env(safe-area-inset-left)",
+        paddingRight: "env(safe-area-inset-right)",
+        paddingBottom: isPhone ? undefined : "env(safe-area-inset-bottom)",
       }}
     >
       <div

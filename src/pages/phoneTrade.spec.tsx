@@ -156,6 +156,15 @@ describe("phone trade page", () => {
     expect(mockOnTapCell).toHaveBeenCalledTimes(1);
   });
 
+  it("keeps a left-edge pan strip so mobile swipe-back does not collide with touchAction none", () => {
+    setWidth(390);
+    render(<TradePage />);
+    const boardSection = screen.getByLabelText("Trading board");
+    const strip = boardSection.querySelector("div[aria-hidden='true']") as HTMLElement | null;
+    expect(strip).toBeTruthy();
+    expect(strip?.style.touchAction).toBe("pan-x pan-y");
+  });
+
   it("at 1440 px renders desktop SidePanel", () => {
     setWidth(1440);
     render(<TradePage />);

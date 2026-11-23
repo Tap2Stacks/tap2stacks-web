@@ -104,8 +104,48 @@ describe("useSponsoredCalls", () => {
   });
 
   afterEach(() => {
+    vi.unstubAllEnvs();
     vi.useRealTimers();
     vi.clearAllMocks();
+  });
+
+  it("passes ERC-8021 attribution to the sponsored wallet without changing its calls", async () => {
+    vi.stubEnv("VITE_BASE_BUILDER_CODE", "bc_b7k3p9da");
+    mockCapabilitiesData = { paymasterService: { supported: true } };
+    mockCustomClient.mockResolvedValue({ token: "tok123", expiresAt: Date.now() + 120_000 });
+    mockSendCallsAsync.mockResolvedValue({ id: "0xbatch" });
+    const { result } = renderHook(() => useSponsoredCalls());
+    const calls = faucetCall();
+
+    await act(async () => { await result.current.send(calls); });
+
+    expect(mockSendCallsAsync).toHaveBeenCalledWith({
+      calls,
+      chainId: 84532,
+      capabilities: {
+        paymasterService: { url: expect.stringMatching(/\/api\/paymaster\/t\/tok123$/) },
+        dataSuffix: {
+          value: "0x62635f62376b33703964610b0080218021802180218021802180218021",
+          optional: true,
+        },
+      },
+    });
+  });
+
+  it("passes ERC-8021 attribution to decoded and raw sequential writes", async () => {
+    vi.stubEnv("VITE_BASE_BUILDER_CODE", "bc_b7k3p9da");
+    mockWriteContractAsync.mockResolvedValue("0xknown");
+    mockSendTransactionAsync.mockResolvedValue("0xraw");
+    const { result } = renderHook(() => useSponsoredCalls());
+    const rawCall = { to: VAULT, data: "0x11223344" } as const;
+
+    await act(async () => { await result.current.send([...depositCalls(), rawCall]); });
+
+    const dataSuffix = "0x62635f62376b33703964610b0080218021802180218021802180218021";
+    expect(mockWriteContractAsync).toHaveBeenCalledTimes(2);
+    expect(mockWriteContractAsync).toHaveBeenNthCalledWith(1, expect.objectContaining({ dataSuffix }));
+    expect(mockWriteContractAsync).toHaveBeenNthCalledWith(2, expect.objectContaining({ dataSuffix }));
+    expect(mockSendTransactionAsync).toHaveBeenCalledWith({ ...rawCall, chainId: 84532, dataSuffix });
   });
 
   it("sponsored send fetches a token and calls sendCalls with url ending in '/api/paymaster/t/tok123'", async () => {

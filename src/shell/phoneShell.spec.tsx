@@ -140,6 +140,9 @@ describe("phone shell", () => {
     expect((container.firstChild as HTMLElement).className).toContain(
       "h-[100dvh]",
     );
+    expect((container.firstChild as HTMLElement).style.paddingTop).toContain(
+      "env(safe-area-inset-top)",
+    );
   });
 
   it("at innerWidth = 1440 renders desktop Header and no BottomNav", () => {

@@ -1,16 +1,33 @@
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { WalletDialog } from "./WalletDialog";
+
 const connectAsync = vi.fn(async () => ({}));
 const emailApi = vi.hoisted(() => ({ currentUser: null, sendCode: vi.fn(async () => ({ flowId: "flow1" })), verifyCode: vi.fn(async () => ({})) }));
 const startEmailWallet = vi.hoisted(() => vi.fn(async () => emailApi));
-vi.mock("./emailRuntime", () => ({ startEmailWallet }));
-vi.mock("wagmi", () => ({ useConnect: () => ({ connectors: [
+let mockConnectors = [
   { uid: "base", id: "baseAccount", name: "Base Account" },
   { uid: "mm", id: "io.metamask", type: "injected", name: "MetaMask" },
   { uid: "email", id: "cdpEmail", type: "cdpEmail", name: "Email" },
-], connectAsync, isPending: false }) }));
-afterEach(() => { cleanup(); vi.clearAllMocks(); vi.unstubAllEnvs(); });
+];
+
+vi.mock("./emailRuntime", () => ({ startEmailWallet }));
+vi.mock("wagmi", () => ({ useConnect: () => ({ connectors: mockConnectors, connectAsync, isPending: false }) }));
+
+const originalUA = navigator.userAgent;
+
+afterEach(() => {
+  cleanup();
+  vi.clearAllMocks();
+  vi.unstubAllEnvs();
+  Object.defineProperty(navigator, "userAgent", { configurable: true, value: originalUA });
+  mockConnectors = [
+    { uid: "base", id: "baseAccount", name: "Base Account" },
+    { uid: "mm", id: "io.metamask", type: "injected", name: "MetaMask" },
+    { uid: "email", id: "cdpEmail", type: "cdpEmail", name: "Email" },
+  ];
+});
+
 describe("wallet dialog", () => {
   it("lists wallets and connects the chosen browser wallet", async () => {
     const close = vi.fn();
@@ -20,6 +37,26 @@ describe("wallet dialog", () => {
     await waitFor(() => expect(connectAsync).toHaveBeenCalledWith({ connector: expect.objectContaining({ id: "io.metamask" }) }));
     await waitFor(() => expect(close).toHaveBeenCalled());
   });
+
+  it("prefers the EIP-6963 Coinbase Wallet provider first inside Coinbase Wallet browser", async () => {
+    Object.defineProperty(navigator, "userAgent", {
+      configurable: true,
+      value: "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0) CoinbaseWallet/28.0",
+    });
+    mockConnectors = [
+      { uid: "base", id: "baseAccount", name: "Base Account" },
+      { uid: "cb", id: "com.coinbase.wallet", type: "injected", name: "Coinbase Wallet" },
+      { uid: "mm", id: "io.metamask", type: "injected", name: "MetaMask" },
+    ];
+    render(<WalletDialog open onClose={vi.fn()} onDisconnect={vi.fn()} />);
+
+    const buttons = screen.getAllByRole("button").filter((btn) => btn.getAttribute("aria-label") !== "Close wallet dialog");
+    expect(buttons[0].textContent).toContain("Coinbase Wallet");
+    expect(buttons[0].textContent).toContain("In-app browser wallet");
+    fireEvent.click(buttons[0]);
+    await waitFor(() => expect(connectAsync).toHaveBeenCalledWith({ connector: expect.objectContaining({ id: "com.coinbase.wallet" }) }));
+  });
+
   it("shows account and network and disconnects", () => {
     const disconnect = vi.fn();
     render(<WalletDialog open onClose={vi.fn()} address="0x1234" network="Base Sepolia" onDisconnect={disconnect} />);
@@ -28,6 +65,7 @@ describe("wallet dialog", () => {
     fireEvent.click(screen.getByRole("button", { name: "Disconnect" }));
     expect(disconnect).toHaveBeenCalledOnce();
   });
+
   it("hides email without a project ID, and completes the email code flow when configured", async () => {
     vi.stubEnv("VITE_CDP_PROJECT_ID", "");
     const { rerender } = render(<WalletDialog open onClose={vi.fn()} onDisconnect={vi.fn()} />);
@@ -46,6 +84,7 @@ describe("wallet dialog", () => {
     expect(startEmailWallet).toHaveBeenCalledWith("project-123");
     await waitFor(() => expect(close).toHaveBeenCalled());
   });
+
   it("copies the address and links to the current Base explorer", async () => {
     const writeText = vi.fn(async () => {});
     Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } });
@@ -55,5 +94,4 @@ describe("wallet dialog", () => {
     await screen.findByRole("button", { name: "Copied" });
     expect(writeText).toHaveBeenCalledWith("0x1234");
   });
-
 });

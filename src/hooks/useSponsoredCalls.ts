@@ -14,6 +14,7 @@ import { baseSepolia } from "../config/chains";
 import { BACKEND_URL } from "../constant";
 import testUsdcAbi from "../contracts/abi/TestUSDC.json";
 import tap2StacksVaultAbi from "../contracts/abi/Tap2StacksVault.json";
+import { builderCodeSuffix } from "../lib/builderCode";
 import type { Call } from "../lib/calls";
 import {
   fetchPaymasterToken,
@@ -81,6 +82,7 @@ async function getPaymasterToken(address: string | undefined): Promise<string> {
 
 async function sendSequentialCalls(
   calls: Call[],
+  dataSuffix: ReturnType<typeof builderCodeSuffix>,
   config: ReturnType<typeof useConfig> | undefined,
   writeContractAsync: ReturnType<typeof useWriteContract>["writeContractAsync"],
   sendTransactionAsync: ReturnType<
@@ -97,11 +99,13 @@ async function sendSequentialCalls(
           functionName: decoded.functionName,
           args: decoded.args,
           chainId: baseSepolia.id,
+          ...(dataSuffix ? { dataSuffix } : {}),
         })
       : await sendTransactionAsync({
           to: call.to,
           data: call.data,
           chainId: baseSepolia.id,
+          ...(dataSuffix ? { dataSuffix } : {}),
         });
 
     if (config && typeof lastHash === "string" && lastHash.startsWith("0x")) {
@@ -140,10 +144,12 @@ export function useSponsoredCalls(): {
       if (calls.length === 0) {
         throw new Error("No calls to submit");
       }
+      const dataSuffix = builderCodeSuffix(import.meta.env.VITE_BASE_BUILDER_CODE);
 
       if (!sponsored) {
         return sendSequentialCalls(
           calls,
+          dataSuffix,
           config,
           writeContractAsync,
           sendTransactionAsync,
@@ -157,6 +163,7 @@ export function useSponsoredCalls(): {
         toast("You pay gas");
         return sendSequentialCalls(
           calls,
+          dataSuffix,
           config,
           writeContractAsync,
           sendTransactionAsync,
@@ -167,7 +174,10 @@ export function useSponsoredCalls(): {
       const result = await sendCallsAsync({
         chainId: baseSepolia.id,
         calls,
-        capabilities: { paymasterService: { url: paymasterUrl } },
+        capabilities: {
+          paymasterService: { url: paymasterUrl },
+          ...(dataSuffix ? { dataSuffix: { value: dataSuffix, optional: true } } : {}),
+        },
       });
       const id = typeof result === "string" ? result : result.id;
       if (config) {

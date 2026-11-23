@@ -10,7 +10,7 @@ import { AssetLogo, getAssetMonogram, resolveAssetLogo } from "./AssetLogo";
 afterEach(cleanup);
 
 describe("AssetLogo lookup and rendering", () => {
-  it("resolves all supported stock tickers, tokens, and networks case-insensitively", () => {
+  it("resolves bundled stock logos, tokens, and networks case-insensitively", () => {
     expect(resolveAssetLogo("NVDA")?.label).toBe("NVIDIA");
     expect(resolveAssetLogo(" nvda ")?.label).toBe("NVIDIA");
     expect(resolveAssetLogo("TSLA")?.label).toBe("Tesla");
@@ -38,9 +38,13 @@ describe("AssetLogo lookup and rendering", () => {
 
     rerender(<AssetLogo symbol="AAPL" size={20} decorative={false} />);
     expect(container.querySelector("img")).toBeNull();
-    const fallback = screen.getByLabelText("AAPL");
+    const fallback = screen.getByLabelText("Apple");
     expect(fallback.textContent).toBe("AA");
     expect(fallback.getAttribute("data-fallback")).toBe("monogram");
+
+    rerender(<AssetLogo symbol="SP500" size={20} decorative={false} />);
+    const spFallback = screen.getByLabelText("S&P 500");
+    expect(spFallback.textContent).toBe("SP");
   });
 
   it("appears in TickerRow, OpenTapsList, and WinBanner", () => {

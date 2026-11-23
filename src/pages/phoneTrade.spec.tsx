@@ -68,6 +68,10 @@ describe("phone trade page", () => {
     expect(screen.queryByText("Your open taps")).toBeNull();
 
     const nvdaBtn = screen.getByRole("button", { name: "NVDA" });
+    for (const ticker of ["TSLA", "AAPL", "SP500"]) {
+      expect(screen.getByRole("button", { name: ticker })).toBeTruthy();
+    }
+    expect(screen.getByText("Perp price · Hyperliquid trade.xyz")).toBeTruthy();
     const board = screen.getByLabelText("Live price and tap board");
     const openTapsBtn = screen.getByRole("button", {
       name: /0 open taps \/ \$0 on the board/i,

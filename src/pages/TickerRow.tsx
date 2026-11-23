@@ -83,14 +83,16 @@ export function TickerRow({ compact = false }: { compact?: boolean }) {
             </button>
           ))}
         </div>
-        <div className="flex shrink-0 flex-col items-end gap-1">
+        <div className="flex min-w-0 flex-col items-end gap-1">
           <span
             className="rounded-full border px-2 py-1 text-[10px] font-bold"
             style={{ color: stale ? THEME.loss : THEME.win }}
           >
             {stale ? "PAUSED" : "LIVE"}
           </span>
-          <span className="text-[10px] font-medium opacity-55">{PERP_PRICE_LABEL}</span>
+          <span className="max-w-full text-right text-[10px] font-medium leading-tight opacity-55">
+            {PERP_PRICE_LABEL}
+          </span>
         </div>
       </div>
       <p className="text-4xl font-bold tracking-tight tabular-nums">

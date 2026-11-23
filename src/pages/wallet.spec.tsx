@@ -280,4 +280,54 @@ describe("WalletView", () => {
     const faucetBtn = screen.getByRole("button", { name: /1h 1m/i });
     expect((faucetBtn as HTMLButtonElement).disabled).toBe(true);
   });
+
+  it("attaches Base Builder Code attribution to faucet, deposit, and withdraw writes", async () => {
+    vi.stubEnv("VITE_BASE_BUILDER_CODE", "bc_ymo2v08a");
+    const expectedSuffix =
+      "0x62635f796d6f32763038610b0080218021802180218021802180218021";
+
+    mockCapabilitiesData = undefined;
+    mockWriteContractAsync.mockResolvedValue("0xtx");
+    render(<WalletView />);
+
+    fireEvent.click(screen.getByRole("button", { name: /Claim 100 tUSDC/i }));
+    await waitFor(() => expect(mockWriteContractAsync).toHaveBeenCalledTimes(1));
+    expect(mockWriteContractAsync).toHaveBeenLastCalledWith(
+      expect.objectContaining({ functionName: "faucet", dataSuffix: expectedSuffix }),
+    );
+
+    fireEvent.change(screen.getByPlaceholderText("0"), { target: { value: "5" } });
+    fireEvent.click(screen.getByRole("button", { name: /Deposit tUSDC/i }));
+    await waitFor(() => expect(mockWriteContractAsync).toHaveBeenCalledTimes(3));
+    expect(mockWriteContractAsync).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({ functionName: "approve", dataSuffix: expectedSuffix }),
+    );
+    expect(mockWriteContractAsync).toHaveBeenNthCalledWith(
+      3,
+      expect.objectContaining({ functionName: "deposit", dataSuffix: expectedSuffix }),
+    );
+
+    mockCapabilitiesData = { 84532: { paymasterService: { supported: true } } };
+    mockSendCallsAsync.mockResolvedValue({ id: "bundle-w2" });
+    mockRequestWithdrawal.mockResolvedValue({
+      sessionId: "s-2",
+      amountBase: "5000000",
+      deadline: 1_800_000_000,
+      signature: "0xdeadbeef",
+      vault: VAULT,
+    });
+    fireEvent.click(screen.getByRole("button", { name: /Switch swap direction/i }));
+    fireEvent.change(screen.getByPlaceholderText("0"), { target: { value: "5" } });
+    fireEvent.click(screen.getByRole("button", { name: /Withdraw tUSDC/i }));
+
+    await waitFor(() => expect(mockSendCallsAsync).toHaveBeenCalledTimes(1));
+    expect(mockSendCallsAsync).toHaveBeenCalledWith(
+      expect.objectContaining({
+        capabilities: expect.objectContaining({
+          dataSuffix: { value: expectedSuffix, optional: true },
+        }),
+      }),
+    );
+  });
 });

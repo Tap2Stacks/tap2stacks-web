@@ -32,6 +32,11 @@ export function PhoneTradePage({
         aria-label="Trading board"
       >
         <BoardCanvas onTapCell={onTapCell} flash={flash} />
+        <div
+          aria-hidden="true"
+          className="pointer-events-auto absolute inset-y-0 left-0 w-4"
+          style={{ touchAction: "pan-x pan-y" }}
+        />
       </section>
       <OpenTapsLine />
       <div className="flex shrink-0 items-center gap-1 px-2 py-1" aria-label="Balance and stake">

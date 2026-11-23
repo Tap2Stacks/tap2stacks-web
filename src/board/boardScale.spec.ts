@@ -2,21 +2,33 @@ import { describe, expect, it } from "vitest";
 import { boardScale } from "./boardScale";
 
 describe("boardScale", () => {
-  it("keeps desktop at nowFraction 0.3 and 20 visible rows", () => {
+  it("shows 35 s history and 35 s future with 20 visible rows and a right gutter on desktop", () => {
     expect(boardScale(1440, 800, false)).toEqual({
-      nowFraction: 0.3,
+      nowFraction: 0.5,
       visibleRows: 20,
+      defaultAheadMs: 35_000,
+      rightGutter: 58,
     });
   });
 
-  it("places now at 20% and sizes rows >= 36 px and columns >= 44 px at 390x536 phone", () => {
-    const scale = boardScale(390, 536, true);
-    expect(scale).toEqual({ nowFraction: 0.2, visibleRows: 14 });
+  it("shows 32 s history and 32 s future with rows >= 36 px and reserved right gutter at 375 px phone", () => {
+    const scale = boardScale(375, 536, true);
+    expect(scale).toEqual({
+      nowFraction: 0.5,
+      visibleRows: 14,
+      defaultAheadMs: 32_000,
+      rightGutter: 50,
+    });
 
-    const msPerPx = 35000 / (390 * (1 - scale.nowFraction));
-    const colWidth = 5000 / msPerPx;
+    const plotW = 375 - scale.rightGutter;
+    const msPerPx = scale.defaultAheadMs / (plotW * (1 - scale.nowFraction));
+    const historyVisibleMs = plotW * scale.nowFraction * msPerPx;
+    const futureVisibleMs = plotW * (1 - scale.nowFraction) * msPerPx;
     const rowHeight = 536 / scale.visibleRows;
-    expect(colWidth).toBeGreaterThanOrEqual(44);
+
+    expect(historyVisibleMs).toBeGreaterThanOrEqual(30_000);
+    expect(historyVisibleMs).toBeLessThanOrEqual(40_000);
+    expect(futureVisibleMs).toBeGreaterThanOrEqual(30_000);
     expect(rowHeight).toBeGreaterThanOrEqual(36);
   });
 

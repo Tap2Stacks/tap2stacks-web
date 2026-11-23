@@ -3,6 +3,7 @@ import {
   cellRect,
   hitTestCell,
   isLocked,
+  plotWidth,
   priceToY,
   timeToX,
   xToTime,
@@ -62,17 +63,12 @@ describe("board layout and hit-testing", () => {
       upper: 155.03,
     };
 
-    // Inside futureCell (x=450, y=285)
     expect(hitTestCell(viewport, [pastStraddlingCell, futureCell], 450, 285)).toBe(
       futureCell,
     );
-
-    // Inside past area (x=280 < 300), even though straddling cell covers x=260..360
     expect(
       hitTestCell(viewport, [pastStraddlingCell, futureCell], 280, 285),
     ).toBeUndefined();
-
-    // Outside any cell
     expect(
       hitTestCell(viewport, [pastStraddlingCell, futureCell], 450, 100),
     ).toBeUndefined();
@@ -101,13 +97,11 @@ describe("board layout and hit-testing", () => {
 
   it("supports panned viewNowMs and round-trips xToTime / yToPrice", () => {
     const panned: BoardViewport = { ...viewport, viewNowMs: 25_000 };
-    // nowMs (10_000) is shifted left to x = 300 - 15000/50 = 0
     expect(timeToX(panned, 10_000)).toBeCloseTo(0, 6);
     expect(timeToX(panned, 25_000)).toBeCloseTo(300, 6);
     expect(xToTime(panned, 500)).toBeCloseTo(35_000, 6);
     expect(yToPrice(panned, 270)).toBeCloseTo(155.03, 6);
 
-    // Future cell at 15_000..20_000 is now at x = 100..200 (still > nowX=0) -> tappable!
     const cell = {
       id: "future-panned",
       startTs: 15_000,
@@ -117,7 +111,6 @@ describe("board layout and hit-testing", () => {
     };
     expect(hitTestCell(panned, [cell], 150, 285)).toBe(cell);
 
-    // When panned into the past (viewNowMs = 0), nowMs=10_000 is at x = 500; x=450 is past -> blocked
     const pannedPast: BoardViewport = { ...viewport, viewNowMs: 0 };
     const pastCell = {
       id: "past-panned",
@@ -128,5 +121,19 @@ describe("board layout and hit-testing", () => {
     };
     expect(hitTestCell(pannedPast, [pastCell], 450, 285)).toBeUndefined();
     expect(hitTestCell(pannedPast, [pastCell], 510, 285)).toBe(pastCell);
+  });
+
+  it("excludes the reserved right gutter from plotWidth and hitTestCell", () => {
+    const gutterVp: BoardViewport = { ...viewport, rightGutter: 60 };
+    expect(plotWidth(gutterVp)).toBe(940);
+    const edgeCell = {
+      id: "right-edge",
+      startTs: 40_000,
+      endTs: 50_000,
+      lower: 155.0,
+      upper: 155.03,
+    };
+    expect(hitTestCell(gutterVp, [edgeCell], 930, 285)).toBe(edgeCell);
+    expect(hitTestCell(gutterVp, [edgeCell], 945, 285)).toBeUndefined();
   });
 });

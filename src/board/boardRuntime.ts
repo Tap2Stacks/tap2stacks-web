@@ -2,7 +2,7 @@ import { useGameStore, type CellData } from '../store';
 import { bounds, drawBoard, SETTLEMENT_DURATION_MS, type BoardScene, type BoardThemeMode } from './draw';
 import { createChartClock } from './clock';
 import { createSmoothValue } from './smooth';
-import { cellRect, hitTestCell, isLocked, priceToY, timeToX, xToTime, type BoardViewport } from './layout';
+import { cellRect, hitTestCell, isLocked, plotWidth, priceToY, timeToX, xToTime, type BoardViewport } from './layout';
 import { boardScale } from './boardScale';
 import { PHONE_BREAKPOINT } from '../shell/useIsPhone';
 import { createDrawnSeries, decimateVisibleLine } from './drawnSeries';
@@ -163,7 +163,7 @@ export class BoardRuntime {
         const rect = cellRect(v, bounds(cell));
         const x = rect.x + rect.w / 2;
         const y = rect.y + rect.h / 2;
-        if (x < 0 || x > v.width || y < 0 || y > v.height) return null;
+        if (x < 0 || x > plotWidth(v) || y < 0 || y > v.height) return null;
         const client = this.el.getBoundingClientRect();
         return { x: client.left + x * client.width / v.width, y: client.top + y * client.height / v.height };
     }
@@ -253,6 +253,8 @@ export class BoardRuntime {
             nowFraction: scale.nowFraction,
             visibleRows: scale.visibleRows,
             priceStep: state.modePriceStep,
+            defaultAheadMs: scale.defaultAheadMs,
+            rightGutter: scale.rightGutter,
             minSeriesPrice: Number.isFinite(minSeriesPrice) ? minSeriesPrice : undefined,
             maxSeriesPrice: Number.isFinite(maxSeriesPrice) ? maxSeriesPrice : undefined,
         };
@@ -265,11 +267,11 @@ export class BoardRuntime {
         const stepped = this.camera.step(perf, dtMs, now, middle, metrics, !!this.reduced?.matches);
         this.viewport = stepped.viewport;
         this.emitHud();
-        return { v: stepped.viewport, live, target, points, moving: stepped.moving, maxQuotedEndTs };
+        return { v: stepped.viewport, live, target, points, moving: stepped.moving, isLive: stepped.isLive, maxQuotedEndTs };
     }
 
     private draw(state: State, now: number, perf: number) {
-        const { v, live, target, points, moving, maxQuotedEndTs } = this.prepare(state, now, perf);
+        const { v, live, target, points, moving, isLive, maxQuotedEndTs } = this.prepare(state, now, perf);
         const next = {
             pricePx: priceToY(v, live),
             second: Math.floor(now / 1000),
@@ -280,7 +282,7 @@ export class BoardRuntime {
             return;
         const smoothed = this.drawn.sample(points, now, live, perf, !!this.reduced?.matches);
         const visibleLeftTs = xToTime(v, 0) - 2000;
-        const visibleRightTs = Math.min(now, xToTime(v, v.width) + 2000);
+        const visibleRightTs = Math.min(now, xToTime(v, plotWidth(v)) + 2000);
         const visiblePoints = decimateVisibleLine(smoothed, visibleLeftTs, visibleRightTs, v.msPerPx);
         const line = visiblePoints.map(p => ({ x: timeToX(v, p.ts), y: priceToY(v, p.price) }));
         const cells = visibleCells(state.cells, state.ticker, v);
@@ -297,6 +299,7 @@ export class BoardRuntime {
             maxQuotedEndTs,
             dpr: this.dpr,
             themeMode: detectThemeMode(),
+            isFollowing: isLive,
         });
         this.previous = next;
         this.dirty = false;

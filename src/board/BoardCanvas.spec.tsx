@@ -48,15 +48,16 @@ it('BoardCanvas seeds recent prices on mount and ticker change; open taps work a
     expect(fetchRecentPrices).toHaveBeenCalledWith('NVDA');
     expect(seriesFor('NVDA').since(0)).toContainEqual({ ts: 9000, price: 155 });
     const canvas = div.querySelector('canvas')!;
+    // With nowFraction=0.5 and rightGutter=58 (plotWidth=942), testCell (15s..20s) spans x=538..606
     act(() => {
-        canvas.dispatchEvent(pointerEvent('pointerdown', { clientX: 450, clientY: 285 }));
-        canvas.dispatchEvent(pointerEvent('pointerup', { clientX: 450, clientY: 285 }));
+        canvas.dispatchEvent(pointerEvent('pointerdown', { clientX: 572, clientY: 285 }));
+        canvas.dispatchEvent(pointerEvent('pointerup', { clientX: 572, clientY: 285 }));
     });
     expect(tap).toHaveBeenCalledWith(cell);
     useGameStore.setState({ cells: [testCell({ timeWindowStart: 11000 })] });
     act(() => {
-        canvas.dispatchEvent(pointerEvent('pointerdown', { clientX: 350, clientY: 285 }));
-        canvas.dispatchEvent(pointerEvent('pointerup', { clientX: 350, clientY: 285 }));
+        canvas.dispatchEvent(pointerEvent('pointerdown', { clientX: 510, clientY: 285 }));
+        canvas.dispatchEvent(pointerEvent('pointerup', { clientX: 510, clientY: 285 }));
     });
     expect(tap).toHaveBeenCalledTimes(1);
     await act(async () => useGameStore.setState({ ticker: 'TSLA' }));

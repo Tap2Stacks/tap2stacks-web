@@ -30,7 +30,7 @@ export interface CellLodPlan {
 
 export function textModeForSize(w: number, h: number): CellTextMode {
   if (w >= 34 && h >= 18) return "full";
-  if (w >= 24 && h >= 14) return "compact";
+  if (w >= 20 && h >= 14) return "compact";
   return "none";
 }
 

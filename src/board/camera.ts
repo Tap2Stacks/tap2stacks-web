@@ -23,6 +23,8 @@ export interface CameraMetrics {
   nowFraction: number;
   visibleRows: number;
   priceStep: number;
+  defaultAheadMs?: number;
+  rightGutter?: number;
   minSeriesPrice?: number;
   maxSeriesPrice?: number;
 }
@@ -34,16 +36,24 @@ export interface CameraStepResult {
   isZoomed: boolean;
 }
 
+function effectivePlotWidth(metrics: Pick<CameraMetrics, "width" | "rightGutter">): number {
+  return Math.max(1, metrics.width - (metrics.rightGutter ?? 0));
+}
+
 export function baseScaleFor(metrics: CameraMetrics): {
   baseMsPerPx: number;
   basePricePerPx: number;
   minTimeZoom: number;
 } {
-  const width = Math.max(1, metrics.width);
+  const plotW = effectivePlotWidth(metrics);
   const height = Math.max(1, metrics.height);
   const futureFraction = Math.max(0.1, 1 - metrics.nowFraction);
-  const baseMsPerPx = DEFAULT_VISIBLE_AHEAD_MS / (width * futureFraction);
-  const maxMsPerPx = (HISTORY_LIMIT_MS + FUTURE_LIMIT_MS) / width;
+  const aheadMs =
+    metrics.defaultAheadMs !== undefined && Number.isFinite(metrics.defaultAheadMs) && metrics.defaultAheadMs > 0
+      ? metrics.defaultAheadMs
+      : DEFAULT_VISIBLE_AHEAD_MS;
+  const baseMsPerPx = aheadMs / (plotW * futureFraction);
+  const maxMsPerPx = (HISTORY_LIMIT_MS + FUTURE_LIMIT_MS) / plotW;
   const minTimeZoom = Math.min(1, baseMsPerPx / maxMsPerPx);
   const step = Number.isFinite(metrics.priceStep) && metrics.priceStep > 0 ? metrics.priceStep : 0.03;
   const basePricePerPx = (step * Math.max(1, metrics.visibleRows)) / height;
@@ -227,7 +237,8 @@ export class BoardCamera {
     const msPerPx = baseMsPerPx / z.timeZoom;
     const pricePerPx = basePricePerPx / z.priceZoom;
 
-    const tBounds = timeOffsetBounds(metrics.width, metrics.nowFraction, msPerPx);
+    const plotW = effectivePlotWidth(metrics);
+    const tBounds = timeOffsetBounds(plotW, metrics.nowFraction, msPerPx);
     const pBounds = priceBounds(
       liveCenterPrice,
       metrics.priceStep,
@@ -237,7 +248,7 @@ export class BoardCamera {
     );
 
     // Re-sync raw positions to their visually resisted positions so spring-back starts smoothly
-    const timeLimit = metrics.width * RUBBER_BAND_FRACTION * msPerPx;
+    const timeLimit = plotW * RUBBER_BAND_FRACTION * msPerPx;
     const priceLimit = metrics.height * RUBBER_BAND_FRACTION * pricePerPx;
     const resistedOffset = applyEdgeResistance(
       this.rawViewNowMs - nowMs,
@@ -288,7 +299,8 @@ export class BoardCamera {
     const msPerPx = baseMsPerPx / z.timeZoom;
     const pricePerPx = basePricePerPx / z.priceZoom;
 
-    const tBounds = timeOffsetBounds(metrics.width, metrics.nowFraction, msPerPx);
+    const plotW = effectivePlotWidth(metrics);
+    const tBounds = timeOffsetBounds(plotW, metrics.nowFraction, msPerPx);
     const pBounds = priceBounds(
       liveCenterPrice,
       metrics.priceStep,
@@ -334,7 +346,8 @@ export class BoardCamera {
     }
 
     // Keep the world (ts, price) directly under (anchorX, anchorY) stationary
-    const dxFromNow = anchorX - metrics.width * metrics.nowFraction;
+    const plotW = effectivePlotWidth(metrics);
+    const dxFromNow = anchorX - plotW * metrics.nowFraction;
     const anchorTs = this.rawViewNowMs + dxFromNow * prevMsPerPx;
     const nextViewNowMs = anchorTs - dxFromNow * nextMsPerPx;
 
@@ -342,7 +355,7 @@ export class BoardCamera {
     const anchorPrice = this.rawCenterPrice - dyFromMid * prevPricePerPx;
     const nextCenterPrice = anchorPrice + dyFromMid * nextPricePerPx;
 
-    const tBounds = timeOffsetBounds(metrics.width, metrics.nowFraction, nextMsPerPx);
+    const tBounds = timeOffsetBounds(plotW, metrics.nowFraction, nextMsPerPx);
     const pBounds = priceBounds(
       liveCenterPrice,
       metrics.priceStep,
@@ -405,6 +418,8 @@ export class BoardCamera {
     reducedMotion: boolean,
   ): CameraStepResult {
     const dt = Math.max(0, Math.min(100, dtMs));
+    const plotW = effectivePlotWidth(metrics);
+    const rightGutter = metrics.rightGutter ?? 0;
     const { baseMsPerPx, basePricePerPx, minTimeZoom } = baseScaleFor(metrics);
     let moving = false;
 
@@ -422,7 +437,7 @@ export class BoardCamera {
       const z = clampZoom(this.timeZoom, this.priceZoom, minTimeZoom);
       const msPerPx = baseMsPerPx / z.timeZoom;
       const pricePerPx = basePricePerPx / z.priceZoom;
-      const tBounds = timeOffsetBounds(metrics.width, metrics.nowFraction, msPerPx);
+      const tBounds = timeOffsetBounds(plotW, metrics.nowFraction, msPerPx);
       const offsetMs = clamp(this.snapAnim.fromTimeOffsetMs * inv, tBounds.minOffsetMs, tBounds.maxOffsetMs);
       const centerPrice = liveCenterPrice + this.snapAnim.fromPriceOffset * inv;
 
@@ -444,6 +459,7 @@ export class BoardCamera {
           msPerPx,
           centerPrice,
           pricePerPx,
+          rightGutter,
         },
         moving,
         isLive: true,
@@ -457,7 +473,7 @@ export class BoardCamera {
     this.priceZoom = z.priceZoom;
     const msPerPx = baseMsPerPx / z.timeZoom;
     const pricePerPx = basePricePerPx / z.priceZoom;
-    const tBounds = timeOffsetBounds(metrics.width, metrics.nowFraction, msPerPx);
+    const tBounds = timeOffsetBounds(plotW, metrics.nowFraction, msPerPx);
     const pBounds = priceBounds(
       liveCenterPrice,
       metrics.priceStep,
@@ -479,6 +495,7 @@ export class BoardCamera {
           msPerPx,
           centerPrice: liveCenterPrice,
           pricePerPx,
+          rightGutter,
         },
         moving: false,
         isLive: true,
@@ -491,7 +508,7 @@ export class BoardCamera {
     let centerPrice = this.rawCenterPrice ?? liveCenterPrice;
 
     if (this.dragging) {
-      const timeLimit = metrics.width * RUBBER_BAND_FRACTION * msPerPx;
+      const timeLimit = plotW * RUBBER_BAND_FRACTION * msPerPx;
       const priceLimit = metrics.height * RUBBER_BAND_FRACTION * pricePerPx;
       const resistedOffset = applyEdgeResistance(
         viewNowMs - nowMs,
@@ -515,6 +532,7 @@ export class BoardCamera {
           msPerPx,
           centerPrice: resistedPrice,
           pricePerPx,
+          rightGutter,
         },
         moving: true,
         isLive: false,
@@ -608,6 +626,7 @@ export class BoardCamera {
         msPerPx,
         centerPrice,
         pricePerPx,
+        rightGutter,
       },
       moving,
       isLive: false,

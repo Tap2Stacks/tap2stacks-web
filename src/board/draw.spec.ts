@@ -114,6 +114,58 @@ describe('drawBoard', () => {
         const bg = calls.find(c => c.name === 'fillRect' && c.args[0] === 0 && c.args[1] === 0);
         expect(bg?.fill).toBe(boardPalette('dark').surface);
     });
+
+    it('draws left price-axis labels after the price curve with surface backing so labels stay readable', () => {
+        const { ctx, calls } = recordingContext();
+        drawBoard(ctx, scene);
+        const curveIdx = calls.findIndex(c => c.name === 'bezierCurveTo');
+        const axisLabelIdx = calls.findIndex(c => c.name === 'fillText' && c.args[0] === '155.03' && c.args[1] === 5);
+        expect(curveIdx).toBeGreaterThan(-1);
+        expect(axisLabelIdx).toBeGreaterThan(curveIdx);
+        // Surface backing fill precedes the axis label text
+        const backingFill = calls.slice(curveIdx, axisLabelIdx).some(c => c.name === 'fill' && c.fill === boardPalette('light').surface);
+        expect(backingFill).toBe(true);
+    });
+
+    it('clips cells before the reserved right gutter and places the live price tag cleanly inside the gutter', () => {
+        const { ctx, calls } = recordingContext();
+        drawBoard(ctx, {
+            ...scene,
+            viewport: { ...scene.viewport, rightGutter: 58 },
+        });
+        // Clip rect restricts chart content to plotWidth = 942
+        expect(calls.some(c => c.name === 'rect' && c.args[0] === 0 && c.args[2] === 942)).toBe(true);
+        // Live price text is centered strictly inside the right gutter (x > 942)
+        const liveText = calls.find(c => c.name === 'fillText' && c.args[0] === '155.12');
+        expect(Number(liveText?.args[1])).toBeGreaterThan(942);
+    });
+
+    it('shows a compact arrow+price axis edge marker when panned into history instead of a full live tag over the chart', () => {
+        const { ctx, calls } = recordingContext();
+        drawBoard(ctx, {
+            ...scene,
+            isFollowing: false,
+            viewport: { ...scene.viewport, viewNowMs: -50_000, rightGutter: 58 }, // panned 60 s back into history
+        });
+        // Right-edge arrow marker pointing toward live (155.12→)
+        const marker = calls.find(c => c.name === 'fillText' && c.args[0] === '155.12→');
+        expect(marker).toBeDefined();
+        expect(Number(marker?.args[1])).toBeGreaterThan(942);
+        // No full bare live tag text and no dashed reference line across history
+        expect(calls.some(c => c.name === 'fillText' && c.args[0] === '155.12')).toBe(false);
+        expect(calls.some(c => c.name === 'setLineDash' && Array.isArray(c.args[0]) && (c.args[0] as number[])[0] === 3)).toBe(false);
+
+        // When panned far into the future (live off-screen left), shows left-edge marker (←155.12)
+        calls.length = 0;
+        drawBoard(ctx, {
+            ...scene,
+            isFollowing: false,
+            viewport: { ...scene.viewport, viewNowMs: 80_000, rightGutter: 58 },
+        });
+        const leftMarker = calls.find(c => c.name === 'fillText' && c.args[0] === '←155.12');
+        expect(leftMarker).toBeDefined();
+        expect(Number(leftMarker?.args[1])).toBeLessThan(60);
+    });
 });
 
 it('drawStack draws a count badge x3 and the total $15', () => {

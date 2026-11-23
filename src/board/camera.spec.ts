@@ -214,4 +214,22 @@ describe("camera zoom, pan transforms and clamps", () => {
     expect(timeToX(done.viewport, 400_400)).toBeCloseTo(300, 4);
     expect(priceToY(done.viewport, 155)).toBeCloseTo(300, 4);
   });
+
+  it("respects rightGutter and defaultAheadMs so 375 px phone shows 32 s history and 32 s future before the gutter", () => {
+    const cam = new BoardCamera();
+    const phoneWithGutter: CameraMetrics = {
+      width: 375,
+      height: 500,
+      nowFraction: 0.5,
+      visibleRows: 13,
+      priceStep: 0.03,
+      defaultAheadMs: 32_000,
+      rightGutter: 50,
+    };
+    const { viewport } = cam.step(0, 16, 400_000, 155, phoneWithGutter, false);
+    expect(viewport.rightGutter).toBe(50);
+    expect(timeToX(viewport, 400_000)).toBeCloseTo(162.5, 4);
+    expect(timeToX(viewport, 400_000 - 32_000)).toBeCloseTo(0, 4);
+    expect(timeToX(viewport, 400_000 + 32_000)).toBeCloseTo(325, 4);
+  });
 });

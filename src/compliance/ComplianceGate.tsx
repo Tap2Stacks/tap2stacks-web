@@ -28,6 +28,12 @@ export function ComplianceGate() {
         <p className="mt-3 text-sm leading-relaxed">
           Testnet game. Test USDC has no value. Not for US persons. 18+.
         </p>
+        <p className="mt-2 text-sm">
+          By continuing, you agree to the{" "}
+          <a className="underline" href="/trading-terms.html" target="_blank" rel="noopener">
+            Trading Terms
+          </a>.
+        </p>
         <div className="my-6 space-y-4">
           <label className="flex cursor-pointer items-start gap-3 text-sm">
             <input

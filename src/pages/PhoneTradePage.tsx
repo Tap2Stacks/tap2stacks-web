@@ -42,7 +42,8 @@ export function PhoneTradePage({
         <StakeChips compact shake={shake} />
       </div>
       <p className="shrink-0 px-3 py-1 text-center text-[10px] opacity-60">
-        Testnet game. Test USDC has no value. Not for US persons. 18+.
+        Testnet game. Test USDC has no value. Not for US persons. 18+.{" "}
+        <a className="underline" href="/trading-terms.html" target="_blank" rel="noopener">Trading Terms</a>
       </p>
     </div>
   );

@@ -3,6 +3,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import CryptoJS from "crypto-js";
 import { io, type Socket } from "socket.io-client";
 import { useAccount } from "wagmi";
+import { useComplianceStore } from "../compliance/store";
 import { BACKEND_URL } from "../constant";
 import type { TradeFeedEntry } from "../feed/types";
 import {
@@ -37,6 +38,12 @@ export function useRealtime(): void {
     const connectWss = async () => {
       try {
         socket = io(BACKEND_URL);
+
+        socket.on("connect_error", (error) => {
+          if (isActive && error.message === "UNAVAILABLE_IN_REGION") {
+            useComplianceStore.getState().block();
+          }
+        });
 
         socket.on("connect", async () => {
           if (!isActive) return;

@@ -3,6 +3,7 @@ import { act, render } from "@testing-library/react";
 import CryptoJS from "crypto-js";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { useComplianceStore } from "../compliance/store";
 import { onPrice, onTradeFeed } from "./bus";
 import { useRealtime } from "./useRealtime";
 import { useGameStore } from "../store";
@@ -86,6 +87,17 @@ describe("useRealtime", () => {
 
   afterEach(() => {
     vi.clearAllMocks();
+    useComplianceStore.setState({ blocked: false, gateOpen: true });
+  });
+
+  it("shows the region block only for the server's explicit region rejection", () => {
+    renderWithQuery(<Harness />);
+
+    act(() => handlers.get("connect_error")?.(new Error("network down")));
+    expect(useComplianceStore.getState().blocked).toBe(false);
+
+    act(() => handlers.get("connect_error")?.(new Error("UNAVAILABLE_IN_REGION")));
+    expect(useComplianceStore.getState().blocked).toBe(true);
   });
 
   it("useRealtime subscribes to the five events and trade_feed", () => {

@@ -36,6 +36,8 @@ function confirm() {
 
 it("sign-in stays disabled until both 18+ and not-US boxes are ticked", () => {
   render(<ComplianceBoundary><p>App</p></ComplianceBoundary>);
+  expect(screen.getByRole("link", { name: "Trading Terms" }).getAttribute("href"))
+    .toBe("/trading-terms.html");
   const button = screen.getByRole("button", { name: "Continue" }) as HTMLButtonElement;
   expect(button.disabled).toBe(true);
   fireEvent.click(screen.getByLabelText("I am 18 or older"));

@@ -7,10 +7,19 @@ import { fetchRecentPrices } from '../api/prices';
 import { recordingContext } from '../test/recordingContext';
 import { testCell } from './fixtures';
 import { seriesFor } from './priceSeries';
+
 vi.mock('../api/prices', () => ({ fetchRecentPrices: vi.fn(async () => ({ prevDayPx: null, points: [{ ts: 9000, price: 155 }] })) }));
+
 let cleanup = () => { };
 afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
-it('BoardCanvas seeds recent prices on mount and ticker change; open taps work and locked taps do not', async () => {
+
+function pointerEvent(type: string, opts: { clientX: number; clientY: number; pointerId?: number }) {
+    const ev = new MouseEvent(type, { bubbles: true, clientX: opts.clientX, clientY: opts.clientY });
+    Object.defineProperty(ev, 'pointerId', { value: opts.pointerId ?? 1 });
+    return ev;
+}
+
+function setupBoard() {
     vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true);
     vi.stubGlobal('ResizeObserver', class {
         observe() { }
@@ -29,16 +38,90 @@ it('BoardCanvas seeds recent prices on mount and ticker change; open taps work a
     const root = createRoot(div);
     const tap = vi.fn();
     cleanup = () => { act(() => root.unmount()); div.remove(); };
-    await act(async () => root.render(<BoardCanvas onTapCell={tap}/>));
-    act(() => frame(0));
+    return { div, root, tap, cell, step: (perf = 0) => act(() => frame(perf)) };
+}
+
+it('BoardCanvas seeds recent prices on mount and ticker change; open taps work and locked taps do not', async () => {
+    const { div, root, tap, cell, step } = setupBoard();
+    await act(async () => root.render(<BoardCanvas onTapCell={tap} />));
+    step(0);
     expect(fetchRecentPrices).toHaveBeenCalledWith('NVDA');
     expect(seriesFor('NVDA').since(0)).toContainEqual({ ts: 9000, price: 155 });
     const canvas = div.querySelector('canvas')!;
-    act(() => canvas.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true, clientX: 450, clientY: 285 })));
+    act(() => {
+        canvas.dispatchEvent(pointerEvent('pointerdown', { clientX: 450, clientY: 285 }));
+        canvas.dispatchEvent(pointerEvent('pointerup', { clientX: 450, clientY: 285 }));
+    });
     expect(tap).toHaveBeenCalledWith(cell);
     useGameStore.setState({ cells: [testCell({ timeWindowStart: 11000 })] });
-    act(() => canvas.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true, clientX: 350, clientY: 285 })));
+    act(() => {
+        canvas.dispatchEvent(pointerEvent('pointerdown', { clientX: 350, clientY: 285 }));
+        canvas.dispatchEvent(pointerEvent('pointerup', { clientX: 350, clientY: 285 }));
+    });
     expect(tap).toHaveBeenCalledTimes(1);
     await act(async () => useGameStore.setState({ ticker: 'TSLA' }));
     expect(fetchRecentPrices).toHaveBeenCalledWith('TSLA');
+});
+
+it('dragging pans without firing tap, shows Live button, and Live button / double-tap snaps back', async () => {
+    const { div, root, tap, step } = setupBoard();
+    await act(async () => root.render(<BoardCanvas onTapCell={tap} />));
+    step(0);
+    const canvas = div.querySelector('canvas')!;
+    expect(div.querySelector('button[aria-label="Return to live view"]')).toBeNull();
+
+    // Drag across an open cell: must NOT fire tap, MUST reveal Live button
+    act(() => {
+        canvas.dispatchEvent(pointerEvent('pointerdown', { clientX: 450, clientY: 285 }));
+        canvas.dispatchEvent(pointerEvent('pointermove', { clientX: 520, clientY: 285 }));
+        canvas.dispatchEvent(pointerEvent('pointerup', { clientX: 520, clientY: 285 }));
+    });
+    expect(tap).not.toHaveBeenCalled();
+    const liveBtn = div.querySelector('button[aria-label="Return to live view"]') as HTMLButtonElement;
+    expect(liveBtn).not.toBeNull();
+
+    // Clicking Live snaps back and hides the button once settled
+    act(() => liveBtn.click());
+    step(500);
+    expect(div.querySelector('button[aria-label="Return to live view"]')).toBeNull();
+
+    // Drag away again, then double-tap in the past area to snap back
+    act(() => {
+        canvas.dispatchEvent(pointerEvent('pointerdown', { clientX: 200, clientY: 300 }));
+        canvas.dispatchEvent(pointerEvent('pointermove', { clientX: 350, clientY: 300 }));
+        canvas.dispatchEvent(pointerEvent('pointerup', { clientX: 350, clientY: 300 }));
+    });
+    expect(div.querySelector('button[aria-label="Return to live view"]')).not.toBeNull();
+
+    act(() => {
+        canvas.dispatchEvent(pointerEvent('pointerdown', { clientX: 100, clientY: 300 }));
+        canvas.dispatchEvent(pointerEvent('pointerup', { clientX: 100, clientY: 300 }));
+        canvas.dispatchEvent(pointerEvent('pointerdown', { clientX: 102, clientY: 301 }));
+        canvas.dispatchEvent(pointerEvent('pointerup', { clientX: 102, clientY: 301 }));
+    });
+    step(1000);
+    expect(div.querySelector('button[aria-label="Return to live view"]')).toBeNull();
+});
+
+it('wheel zoom and two-finger pinch zoom never fire cell taps', async () => {
+    const { div, root, tap, step } = setupBoard();
+    await act(async () => root.render(<BoardCanvas onTapCell={tap} />));
+    step(0);
+    const canvas = div.querySelector('canvas')!;
+
+    // Wheel zoom out reveals Live reset affordance
+    act(() => {
+        canvas.dispatchEvent(new WheelEvent('wheel', { bubbles: true, cancelable: true, deltaY: 240, clientX: 450, clientY: 285 }));
+    });
+    expect(div.querySelector('button[aria-label="Return to live view"]')).not.toBeNull();
+
+    // Two-finger pinch over an open cell does not tap
+    act(() => {
+        canvas.dispatchEvent(pointerEvent('pointerdown', { pointerId: 1, clientX: 440, clientY: 285 }));
+        canvas.dispatchEvent(pointerEvent('pointerdown', { pointerId: 2, clientX: 480, clientY: 285 }));
+        canvas.dispatchEvent(pointerEvent('pointermove', { pointerId: 2, clientX: 540, clientY: 285 }));
+        canvas.dispatchEvent(pointerEvent('pointerup', { pointerId: 2, clientX: 540, clientY: 285 }));
+        canvas.dispatchEvent(pointerEvent('pointerup', { pointerId: 1, clientX: 440, clientY: 285 }));
+    });
+    expect(tap).not.toHaveBeenCalled();
 });

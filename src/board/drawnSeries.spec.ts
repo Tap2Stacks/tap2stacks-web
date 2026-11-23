@@ -1,5 +1,5 @@
 import { expect, it } from "vitest";
-import { smoothDrawnHistory, rawPriceAt, createDrawnSeries } from "./drawnSeries";
+import { smoothDrawnHistory, rawPriceAt, createDrawnSeries, decimateVisibleLine } from "./drawnSeries";
 import type { PriceSample } from "./priceSeries";
 const step: PriceSample[] = Array.from({ length: 10 }, (_, i) => ({ ts: i * 1000, price: i < 4 ? 154 : 154.01 }));
 it("a 1-cent step held for 3 s has no flat run followed by a jump steeper than 0.0075 dollars per second", () => {
@@ -62,4 +62,15 @@ it("stays monotonic into the easing live dot when a new sample arrives ahead of 
         expect(tail[i].price).toBeGreaterThanOrEqual(tail[i - 1].price - 1e-9);
         expect(tail[i].price).toBeLessThanOrEqual(154.015 + 1e-9);
     }
+});
+it("decimateVisibleLine bounds 5-minute history segments when zoomed out while preserving peaks", () => {
+    const fiveMin: PriceSample[] = Array.from({ length: 1501 }, (_, i) => ({
+        ts: i * 200,
+        price: i === 750 ? 156.5 : 155 + Math.sin(i / 40) * 0.1,
+    }));
+    const decimated = decimateVisibleLine(fiveMin, 0, 300_000, 1120, 1.5);
+    expect(decimated.length).toBeLessThan(320);
+    expect(decimated.some(p => p.price === 156.5)).toBe(true);
+    expect(decimated[0]).toEqual(fiveMin[0]);
+    expect(decimated.at(-1)).toEqual(fiveMin.at(-1));
 });

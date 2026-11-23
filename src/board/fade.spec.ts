@@ -107,4 +107,16 @@ describe("cellFade", () => {
     expect(far.tintAlpha).toBeGreaterThan(far.textAlpha);
     expect(far.tintAlpha).toBeGreaterThanOrEqual(MIN_TINT_ALPHA);
   });
+
+  it("drops odds font weight alongside opacity as win probability decreases", () => {
+    const likely = cellFade({ ...base, multiplier: 2.0 });
+    const moderate = cellFade({ ...base, multiplier: 5.0 });
+    const longshot = cellFade({ ...base, multiplier: 20.0 });
+
+    expect(likely.fontWeight).toBe(700);
+    expect(moderate.fontWeight).toBeLessThan(likely.fontWeight);
+    expect(longshot.fontWeight).toBe(400);
+    expect(likely.textAlpha).toBeGreaterThan(moderate.textAlpha);
+    expect(moderate.textAlpha).toBeGreaterThan(longshot.textAlpha);
+  });
 });

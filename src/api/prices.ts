@@ -6,7 +6,7 @@ export async function fetchRecentPrices(ticker: string): Promise<{
     points: PriceSample[];
 }> {
     try {
-        const response = await fetch(`${BACKEND_URL}/api/prices/recent?ticker=${encodeURIComponent(ticker)}&sinceMs=${Date.now() - 60000}`);
+        const response = await fetch(`${BACKEND_URL}/api/prices/recent?ticker=${encodeURIComponent(ticker)}&sinceMs=${Date.now() - 300_000}`);
         if (!response.ok)
             throw new Error(`Recent prices HTTP ${response.status}`);
         const data = await response.json();

@@ -1,21 +1,40 @@
 import { useGameStore, type CellData } from '../store';
-import { bounds, drawBoard, SETTLEMENT_DURATION_MS, type BoardScene } from './draw';
+import { bounds, drawBoard, SETTLEMENT_DURATION_MS, type BoardScene, type BoardThemeMode } from './draw';
 import { createChartClock } from './clock';
 import { createSmoothValue } from './smooth';
-import { cellRect, priceToY, timeToX, type BoardViewport } from './layout';
+import { cellRect, hitTestCell, isLocked, priceToY, timeToX, xToTime, type BoardViewport } from './layout';
 import { boardScale } from './boardScale';
 import { PHONE_BREAKPOINT } from '../shell/useIsPhone';
-import { createDrawnSeries } from './drawnSeries';
+import { createDrawnSeries, decimateVisibleLine } from './drawnSeries';
 import { visibleCells } from './retainedCells';
-import { seriesFor, shouldRedraw } from './priceSeries';
+import { HISTORY_RETENTION_MS, seriesFor, shouldRedraw } from './priceSeries';
+import { BoardCamera, type CameraMetrics } from './camera';
+
 type State = ReturnType<typeof useGameStore.getState>;
+
+export interface BoardHudState {
+    following: boolean;
+    zoomed: boolean;
+}
+
+function detectThemeMode(): BoardThemeMode {
+    if (typeof document === 'undefined') return 'light';
+    const root = document.documentElement;
+    if (root.classList.contains('dark') || root.dataset.theme === 'dark') {
+        return 'dark';
+    }
+    return 'light';
+}
+
 export class BoardRuntime {
     viewport: BoardViewport | null = null;
+    private camera = new BoardCamera();
     private clock = createChartClock();
     private head = createSmoothValue();
     private drawn = createDrawnSeries();
     private center = createSmoothValue(400);
     private size = { width: 1000, height: 600 };
+    private dpr = 1;
     private frame = 0;
     private dirty = true;
     private previous?: Parameters<typeof shouldRedraw>[0];
@@ -23,13 +42,28 @@ export class BoardRuntime {
     private lastCells?: CellData[];
     private lastStacks?: State['stacks'];
     private lastTs = 0;
+    private lastPerf: number | null = null;
+    private lastNowMs = 0;
+    private lastCenterPrice = 0;
+    private lastMetrics: CameraMetrics | null = null;
+    private lastHud: BoardHudState = { following: true, zoomed: false };
     private reduced = window.matchMedia?.('(prefers-reduced-motion: reduce)');
     private observer: ResizeObserver;
     private el: HTMLCanvasElement;
     private ctx: CanvasRenderingContext2D;
     private flash: () => BoardScene['flash'];
-    constructor(el: HTMLCanvasElement, ctx: CanvasRenderingContext2D, flash: () => BoardScene['flash']) {
-        this.el = el; this.ctx = ctx; this.flash = flash;
+    private onHudChange?: (hud: BoardHudState) => void;
+
+    constructor(
+        el: HTMLCanvasElement,
+        ctx: CanvasRenderingContext2D,
+        flash: () => BoardScene['flash'],
+        onHudChange?: (hud: BoardHudState) => void,
+    ) {
+        this.el = el;
+        this.ctx = ctx;
+        this.flash = flash;
+        this.onHudChange = onHudChange;
         this.observer = new ResizeObserver(this.resize);
         this.observer.observe(el);
         this.resize();
@@ -37,7 +71,91 @@ export class BoardRuntime {
         if (!document.hidden)
             this.frame = requestAnimationFrame(this.render);
     }
-    cellCenter(cellId: string): {x: number; y: number} | null {
+
+    get isFollowing(): boolean {
+        return this.camera.isFollowing;
+    }
+
+    get isZoomed(): boolean {
+        return this.camera.isZoomed;
+    }
+
+    beginDrag(): void {
+        if (!this.lastMetrics) return;
+        this.camera.beginDrag(this.lastNowMs, this.lastCenterPrice);
+        this.dirty = true;
+    }
+
+    dragBy(dxPx: number, dyPx: number): void {
+        if (!this.lastMetrics) return;
+        this.camera.dragBy(dxPx, dyPx, this.lastMetrics, this.lastNowMs, this.lastCenterPrice);
+        this.dirty = true;
+        this.emitHud();
+    }
+
+    endDrag(vxPxPerMs: number, vyPxPerMs: number): void {
+        if (!this.lastMetrics) return;
+        this.camera.endDrag(
+            vxPxPerMs,
+            vyPxPerMs,
+            this.lastMetrics,
+            this.lastNowMs,
+            this.lastCenterPrice,
+            !!this.reduced?.matches,
+        );
+        this.dirty = true;
+        this.emitHud();
+    }
+
+    panBy(dxPx: number, dyPx: number): void {
+        if (!this.lastMetrics) return;
+        this.camera.panByPx(dxPx, dyPx, this.lastMetrics, this.lastNowMs, this.lastCenterPrice);
+        this.dirty = true;
+        this.emitHud();
+    }
+
+    zoomAt(factorTime: number, factorPrice: number, canvasX: number, canvasY: number): void {
+        if (!this.lastMetrics) return;
+        this.camera.zoomAt(
+            factorTime,
+            factorPrice,
+            canvasX,
+            canvasY,
+            this.lastMetrics,
+            this.lastNowMs,
+            this.lastCenterPrice,
+        );
+        this.dirty = true;
+        this.emitHud();
+    }
+
+    snapToLive(): void {
+        const perfNow = this.lastPerf ?? performance.now();
+        this.camera.snapToLive(perfNow, this.lastNowMs, this.lastCenterPrice, !!this.reduced?.matches);
+        this.dirty = true;
+        this.emitHud();
+    }
+
+    hitTest(clientX: number, clientY: number): { cell: CellData; tappable: boolean } | null {
+        const v = this.viewport;
+        if (!v) return null;
+        const r = this.el.getBoundingClientRect();
+        if (r.width <= 0 || r.height <= 0) return null;
+        const x = (clientX - r.left) * v.width / r.width;
+        const y = (clientY - r.top) * v.height / r.height;
+        const s = useGameStore.getState();
+        const cells = s.cells.filter(c => c.original.ticker === s.ticker).map(c => ({ ...bounds(c), cell: c }));
+        const hit = hitTestCell(v, cells, x, y);
+        if (!hit) return null;
+        const nowMs = Date.now() + s.serverTimeOffset;
+        const tappable =
+            hit.cell.status === 'active' &&
+            !isLocked(hit.startTs, nowMs) &&
+            !s.feedStale[s.ticker];
+        return { cell: hit.cell, tappable };
+    }
+
+    cellCenter(cellId: string): { x: number; y: number } | null {
         const state = useGameStore.getState();
         const cell = state.cells.find(c => c.id === cellId && c.original.ticker === state.ticker);
         const v = this.viewport;
@@ -47,25 +165,43 @@ export class BoardRuntime {
         const y = rect.y + rect.h / 2;
         if (x < 0 || x > v.width || y < 0 || y > v.height) return null;
         const client = this.el.getBoundingClientRect();
-        return {x: client.left + x * client.width / v.width, y: client.top + y * client.height / v.height};
+        return { x: client.left + x * client.width / v.width, y: client.top + y * client.height / v.height };
     }
-    dispose() { this.observer.disconnect(); cancelAnimationFrame(this.frame); document.removeEventListener('visibilitychange', this.visibility); }
+
+    dispose() {
+        this.observer.disconnect();
+        cancelAnimationFrame(this.frame);
+        document.removeEventListener('visibilitychange', this.visibility);
+    }
+
+    private emitHud() {
+        const following = this.camera.isFollowing;
+        const zoomed = this.camera.isZoomed;
+        if (following !== this.lastHud.following || zoomed !== this.lastHud.zoomed) {
+            this.lastHud = { following, zoomed };
+            this.onHudChange?.(this.lastHud);
+        }
+    }
+
     private resize = () => {
         const r = this.el.getBoundingClientRect();
         this.size = { width: r.width || 1000, height: r.height || 600 };
-        const dpr = Math.min(window.devicePixelRatio || 1, 2);
-        this.el.width = Math.round(this.size.width * dpr);
-        this.el.height = Math.round(this.size.height * dpr);
-        this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        this.dpr = Math.min(window.devicePixelRatio || 1, 2);
+        this.el.width = Math.round(this.size.width * this.dpr);
+        this.el.height = Math.round(this.size.height * this.dpr);
+        this.ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
         this.dirty = true;
     };
+
     private visibility = () => {
         cancelAnimationFrame(this.frame);
         this.clock.reset();
+        this.lastPerf = null;
         this.dirty = true;
         if (!document.hidden)
             this.frame = requestAnimationFrame(this.render);
     };
+
     private render = (perf: number) => {
         if (document.hidden)
             return;
@@ -74,39 +210,94 @@ export class BoardRuntime {
         this.draw(useGameStore.getState(), now, perf);
         this.frame = requestAnimationFrame(this.render);
     };
+
     private prepare(state: State, now: number, perf: number) {
         if (this.lastTicker !== state.ticker) {
             this.head.reset();
             this.drawn.reset();
             this.center.reset();
+            this.camera.reset();
             this.lastTs = 0;
             this.lastTicker = state.ticker;
             this.dirty = true;
+            this.emitHud();
         }
-        const points = seriesFor(state.ticker).since(now - 60000), latest = points.at(-1);
+        const points = seriesFor(state.ticker).since(now - HISTORY_RETENTION_MS), latest = points.at(-1);
         const target = latest?.price ?? state.currentPrice;
         const gap = !!latest && latest.ts !== this.lastTs && this.lastTs > 0 && latest.ts - this.lastTs > 1200;
         if (latest)
             this.lastTs = latest.ts;
         const live = this.head.sample(target, perf, gap || !!this.reduced?.matches);
         const middle = this.center.sample(target, perf, !!this.reduced?.matches);
-        // Six epoch-aligned windows can end almost 35 s from now. Keep the scale
-        // fixed across column rolls so the entire curve never jumps horizontally.
+
+        let minSeriesPrice = live > 0 ? live : Infinity;
+        let maxSeriesPrice = live > 0 ? live : -Infinity;
+        for (const p of points) {
+            if (p.price < minSeriesPrice) minSeriesPrice = p.price;
+            if (p.price > maxSeriesPrice) maxSeriesPrice = p.price;
+        }
+        let maxQuotedEndTs = now;
+        for (const c of state.cells) {
+            if (c.original.ticker !== state.ticker) continue;
+            if (c.timeWindowEnd > maxQuotedEndTs) maxQuotedEndTs = c.timeWindowEnd;
+            const lo = Number(c.original.lowerPrice);
+            const hi = Number(c.original.upperPrice);
+            if (Number.isFinite(lo) && lo < minSeriesPrice) minSeriesPrice = lo;
+            if (Number.isFinite(hi) && hi > maxSeriesPrice) maxSeriesPrice = hi;
+        }
+
         const scale = boardScale(this.size.width, this.size.height, window.innerWidth < PHONE_BREAKPOINT);
-        const v: BoardViewport = { ...this.size, nowMs: now, nowFraction: scale.nowFraction, msPerPx: 35000 / (this.size.width * (1 - scale.nowFraction)), centerPrice: middle, pricePerPx: state.modePriceStep * scale.visibleRows / this.size.height };
-        this.viewport = v;
-        return { v, live, target, points };
+        const metrics: CameraMetrics = {
+            width: this.size.width,
+            height: this.size.height,
+            nowFraction: scale.nowFraction,
+            visibleRows: scale.visibleRows,
+            priceStep: state.modePriceStep,
+            minSeriesPrice: Number.isFinite(minSeriesPrice) ? minSeriesPrice : undefined,
+            maxSeriesPrice: Number.isFinite(maxSeriesPrice) ? maxSeriesPrice : undefined,
+        };
+        const dtMs = this.lastPerf === null ? 0 : Math.max(0, perf - this.lastPerf);
+        this.lastPerf = perf;
+        this.lastNowMs = now;
+        this.lastCenterPrice = middle;
+        this.lastMetrics = metrics;
+
+        const stepped = this.camera.step(perf, dtMs, now, middle, metrics, !!this.reduced?.matches);
+        this.viewport = stepped.viewport;
+        this.emitHud();
+        return { v: stepped.viewport, live, target, points, moving: stepped.moving, maxQuotedEndTs };
     }
+
     private draw(state: State, now: number, perf: number) {
-        const { v, live, target, points } = this.prepare(state, now, perf);
-        const next = { pricePx: priceToY(v, live), second: Math.floor(now / 1000), timePx: now / v.msPerPx };
+        const { v, live, target, points, moving, maxQuotedEndTs } = this.prepare(state, now, perf);
+        const next = {
+            pricePx: priceToY(v, live),
+            second: Math.floor(now / 1000),
+            timePx: (v.viewNowMs ?? now) / v.msPerPx,
+        };
         const animating = Object.values(state.stacks).some(s => s.ticker === state.ticker && s.coins.some(c => Date.now() - (c.updatedAt ?? c.placedAt) < SETTLEMENT_DURATION_MS + 50));
-        if (!this.dirty && this.lastCells === state.cells && this.lastStacks === state.stacks && this.previous && !shouldRedraw(this.previous, next) && Math.abs(live - target) < .000001 && !animating && !this.flash())
+        if (!this.dirty && !moving && this.lastCells === state.cells && this.lastStacks === state.stacks && this.previous && !shouldRedraw(this.previous, next) && Math.abs(live - target) < .000001 && !animating && !this.flash())
             return;
         const smoothed = this.drawn.sample(points, now, live, perf, !!this.reduced?.matches);
-        const line = smoothed.map(p => ({x: timeToX(v, p.ts), y: priceToY(v, p.price)}));
+        const visibleLeftTs = xToTime(v, 0) - 2000;
+        const visibleRightTs = Math.min(now, xToTime(v, v.width) + 2000);
+        const visiblePoints = decimateVisibleLine(smoothed, visibleLeftTs, visibleRightTs, v.msPerPx);
+        const line = visiblePoints.map(p => ({ x: timeToX(v, p.ts), y: priceToY(v, p.price) }));
         const cells = visibleCells(state.cells, state.ticker, v);
-        drawBoard(this.ctx, { viewport: v, cells, line, livePrice: live, priceStep: state.modePriceStep, stacks: state.stacks, flash: this.flash() ? {...this.flash()!, untilMs: this.flash()!.untilMs + state.serverTimeOffset} : undefined, animationNowMs: Date.now(), reducedMotion: !!this.reduced?.matches });
+        drawBoard(this.ctx, {
+            viewport: v,
+            cells,
+            line,
+            livePrice: live,
+            priceStep: state.modePriceStep,
+            stacks: state.stacks,
+            flash: this.flash() ? { ...this.flash()!, untilMs: this.flash()!.untilMs + state.serverTimeOffset } : undefined,
+            animationNowMs: Date.now(),
+            reducedMotion: !!this.reduced?.matches,
+            maxQuotedEndTs,
+            dpr: this.dpr,
+            themeMode: detectThemeMode(),
+        });
         this.previous = next;
         this.dirty = false;
         this.lastCells = state.cells;

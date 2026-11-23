@@ -1,6 +1,10 @@
+import { probabilityHeat } from "./cellColor";
+
 export const TWO_MINUTES_MS = 120_000;
 export const MIN_ODDS_ALPHA = 0.28;
 export const MIN_TINT_ALPHA = 0.48;
+
+export type OddsFontWeight = 400 | 500 | 600 | 700;
 
 export interface CellFadeInput {
   multiplier: number;
@@ -16,11 +20,20 @@ export interface CellFadeInput {
 export interface CellFadeResult {
   textAlpha: number;
   tintAlpha: number;
+  fontWeight: OddsFontWeight;
 }
 
+const HEAT_AT_2X = probabilityHeat(2);
+
 /**
- * Computes smooth opacity for a cell's odds label and heat tint from its
- * price-row distance, time ahead of now, and multiplier size.
+ * Computes smooth opacity and font weight for a cell's odds label and surface
+ * tint from:
+ *  - log-odds win probability (same perceptual axis as cellColor.ts),
+ *  - price-row distance from livePrice, and
+ *  - time ahead of now relative to the visible horizon.
+ *
+ * Less likely cells fade smoothly in both opacity and font weight so colour,
+ * depth, and typography agree.
  */
 export function cellFade(input: CellFadeInput): CellFadeResult {
   const rowStep = Math.abs(input.cellUpper - input.cellLower);
@@ -43,14 +56,22 @@ export function cellFade(input: CellFadeInput): CellFadeResult {
   );
   const timeWeight = 1 - 0.75 * Math.pow(timeProgress, 1.1);
 
-  const multWeight =
-    !Number.isFinite(input.multiplier) || input.multiplier <= 2
-      ? 1
-      : 1 / (1 + Math.pow((input.multiplier - 2) / 6.5, 1.2));
+  let probWeight: number;
+  if (!Number.isFinite(input.multiplier) || input.multiplier <= 2) {
+    probWeight = 1;
+  } else {
+    const t = probabilityHeat(input.multiplier);
+    const normalized = Math.max(0, Math.min(1, (1 - t) / (1 - HEAT_AT_2X)));
+    probWeight = Math.pow(normalized, 1.85);
+  }
 
-  const combined = rowWeight * timeWeight * multWeight;
+  const combined = rowWeight * timeWeight * probWeight;
+  const fontWeight: OddsFontWeight =
+    combined >= 0.62 ? 700 : combined >= 0.38 ? 600 : combined >= 0.18 ? 500 : 400;
+
   return {
     textAlpha: MIN_ODDS_ALPHA + (1 - MIN_ODDS_ALPHA) * combined,
     tintAlpha: MIN_TINT_ALPHA + (1 - MIN_TINT_ALPHA) * combined,
+    fontWeight,
   };
 }

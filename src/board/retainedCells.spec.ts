@@ -23,7 +23,7 @@ it("the live column under the dot is drawn, and a locked stack stays visible unt
     const cell = testCell();
     const { ctx, calls } = recordingContext();
     drawBoard(ctx, { viewport, cells: [cell], line: [], livePrice: 155, stacks: { [cell.id]: { cellId: cell.id, ticker: "NVDA", coins: [{ clientTapId: "a", status: "open", amount: 5, rate: 4.1, placedAt: 0 }] } } });
-    expect(calls.some(c => c.name === "strokeRect" && Number(c.args[0]) < 300 && Number(c.args[0]) + Number(c.args[2]) > 300)).toBe(true);
+    expect(calls.some(c => (c.name === "fillRect" || c.name === "drawImage") && Number(c.args[0]) < 300 && Number(c.args[0]) + Number(c.args[2]) > 300 && Number(c.args[2]) < 500)).toBe(true);
     expect(calls.some(c => c.args[0] === "$5")).toBe(true);
     expect(calls.some(c => c.name === "fillRect" && c.args[0] === 0 && c.args[2] === 1000 && c.args[3] === 0.5 && (c.alpha ?? 1) < 0.2)).toBe(true);
 

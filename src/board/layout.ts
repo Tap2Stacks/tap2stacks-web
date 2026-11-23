@@ -2,20 +2,34 @@ export interface BoardViewport {
   width: number;
   height: number;
   nowMs: number;
+  /** Timestamp anchored at `width * nowFraction`. Defaults to `nowMs` when following live. */
+  viewNowMs?: number;
   nowFraction: number;
   msPerPx: number;
   centerPrice: number;
   pricePerPx: number;
 }
 
-/** Maps a timestamp to canvas x with "now" fixed at nowFraction of board width. */
+/** Maps a timestamp to canvas x with viewNowMs (or nowMs) at nowFraction of board width. */
 export function timeToX(v: BoardViewport, ts: number): number {
-  return v.width * v.nowFraction + (ts - v.nowMs) / v.msPerPx;
+  const originMs = v.viewNowMs ?? v.nowMs;
+  return v.width * v.nowFraction + (ts - originMs) / v.msPerPx;
+}
+
+/** Inverse of timeToX: maps canvas x back to a world timestamp. */
+export function xToTime(v: BoardViewport, x: number): number {
+  const originMs = v.viewNowMs ?? v.nowMs;
+  return originMs + (x - v.width * v.nowFraction) * v.msPerPx;
 }
 
 /** Maps a price to canvas y with centerPrice at vertical center. */
 export function priceToY(v: BoardViewport, price: number): number {
   return v.height / 2 - (price - v.centerPrice) / v.pricePerPx;
+}
+
+/** Inverse of priceToY: maps canvas y back to a price. */
+export function yToPrice(v: BoardViewport, y: number): number {
+  return v.centerPrice - (y - v.height / 2) * v.pricePerPx;
 }
 
 export function cellRect(
@@ -34,11 +48,11 @@ export function cellRect(
   };
 }
 
-/** Returns the cell under (x, y), or undefined in the past area (left of now). */
+/** Returns the cell under (x, y), or undefined in the past area (left of nowMs). */
 export function hitTestCell<
   T extends { startTs: number; endTs: number; lower: number; upper: number },
 >(v: BoardViewport, cells: T[], x: number, y: number): T | undefined {
-  if (x < v.width * v.nowFraction) return undefined;
+  if (x < timeToX(v, v.nowMs)) return undefined;
   for (const cell of cells) {
     const r = cellRect(v, cell);
     if (

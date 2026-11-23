@@ -3,7 +3,8 @@ export interface PriceSample {
   price: number;
 }
 
-const RETENTION_MS = 120_000;
+export const HISTORY_RETENTION_MS = 310_000; // 5 min history + 10 s smoothing margin
+const RETENTION_MS = HISTORY_RETENTION_MS;
 
 interface PriceSeries {
   push(ts: number, price: number): void;

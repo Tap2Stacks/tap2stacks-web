@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { seriesFor, shouldRedraw } from "./priceSeries";
 
 describe("seriesFor", () => {
-  it("drops points older than 120 s and ignores out-of-order points", () => {
+  it("retains 5 minutes of history (plus margin), drops older points, and ignores out-of-order points", () => {
     const s = seriesFor("TEST_ORDER");
     s.push(10_000, 150);
     s.push(20_000, 151);
@@ -12,11 +12,20 @@ describe("seriesFor", () => {
       { ts: 20_000, price: 151 },
     ]);
 
-    // Push at 135_000 drops 10_000 (125_000 > 120_000) and keeps 20_000 (115_000 <= 120_000)
-    s.push(135_000, 152);
+    // Still retained at 300_000 ms later (5 full minutes back)
+    s.push(310_000, 151.5);
+    expect(s.since(0)).toEqual([
+      { ts: 10_000, price: 150 },
+      { ts: 20_000, price: 151 },
+      { ts: 310_000, price: 151.5 },
+    ]);
+
+    // Push at 325_000 drops 10_000 (315_000 > 310_000) and keeps 20_000 (305_000 <= 310_000)
+    s.push(325_000, 152);
     expect(s.since(0)).toEqual([
       { ts: 20_000, price: 151 },
-      { ts: 135_000, price: 152 },
+      { ts: 310_000, price: 151.5 },
+      { ts: 325_000, price: 152 },
     ]);
   });
 

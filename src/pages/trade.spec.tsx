@@ -14,8 +14,21 @@ it("ticker switch calls setTicker; chips start at $5 and select stakes", () => {
     expect(screen.getByRole("button", { name: "Stake $5" }).getAttribute("aria-pressed")).toBe("true");
     fireEvent.click(screen.getByRole("button", { name: "TSLA" }));
     expect(useGameStore.getState().ticker).toBe("TSLA");
+    expect(useGameStore.getState().modePriceStep).toBe(0.08);
+    fireEvent.click(screen.getByRole("button", { name: "SP500" }));
+    expect(useGameStore.getState().ticker).toBe("SP500");
+    expect(useGameStore.getState().modePriceStep).toBe(1.5);
     fireEvent.click(screen.getByRole("button", { name: "Stake $10" }));
     expect(useGameStore.getState().betAmount).toBe(10);
+});
+it("renders four tickers, the perp label, and four-digit prices", () => {
+    useGameStore.setState({ ticker: "SP500", currentPrice: 7076.5 });
+    render(<TradePage />);
+    for (const ticker of ["NVDA", "TSLA", "AAPL", "SP500"]) {
+        expect(screen.getByRole("button", { name: ticker })).toBeTruthy();
+    }
+    expect(screen.getByText("$7076.50")).toBeTruthy();
+    expect(screen.getAllByText("Perp price · Hyperliquid trade.xyz").length).toBeGreaterThan(0);
 });
 it("keys 1 to 4 select stakes and ignore input focus", () => {
     render(<TradePage />);

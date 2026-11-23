@@ -10,6 +10,11 @@ export interface AssetLogoEntry {
   label: string;
 }
 
+const FRIENDLY_LABELS: Record<string, string> = {
+  AAPL: "Apple",
+  SP500: "S&P 500",
+};
+
 const LOGO_ENTRIES: Record<string, AssetLogoEntry> = {
   NVDA: { src: nvdaLogo, label: "NVIDIA" },
   TSLA: { src: tslaLogo, label: "Tesla" },
@@ -29,6 +34,11 @@ export function resolveAssetLogo(symbol: string): AssetLogoEntry | null {
   const key = symbol.trim().toUpperCase();
   if (!key) return null;
   return LOGO_ENTRIES[key] ?? null;
+}
+
+function getAssetLabel(symbol: string): string {
+  const key = symbol.trim().toUpperCase();
+  return LOGO_ENTRIES[key]?.label ?? FRIENDLY_LABELS[key] ?? symbol.trim();
 }
 
 export function getAssetMonogram(symbol: string): string {
@@ -72,7 +82,7 @@ export function AssetLogo({
       data-fallback="monogram"
       data-symbol={symbol}
       aria-hidden={decorative ? true : undefined}
-      aria-label={decorative ? undefined : (alt ?? (symbol.trim() || "Asset"))}
+      aria-label={decorative ? undefined : (alt ?? (getAssetLabel(symbol) || "Asset"))}
       className={`inline-flex shrink-0 items-center justify-center rounded-full font-bold leading-none ${className}`.trim()}
       style={{
         width: size,

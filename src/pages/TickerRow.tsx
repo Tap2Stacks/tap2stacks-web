@@ -1,4 +1,5 @@
 import { AssetLogo } from "../components/AssetLogo";
+import { PERP_PRICE_LABEL, TICKERS } from "../constant/tickers";
 import { useGameStore } from "../store";
 import { formatChange } from "../lib/openingBell";
 import { THEME } from "../ui/theme";
@@ -12,56 +13,61 @@ export function TickerRow({ compact = false }: { compact?: boolean }) {
 
   if (compact) {
     return (
-      <section className="flex shrink-0 items-center gap-2.5 px-3 py-1.5">
+      <section className="flex shrink-0 flex-wrap items-center gap-x-2 gap-y-1 px-2.5 py-1.5">
         <div
-          className="inline-flex overflow-hidden rounded-lg border text-[11px]"
+          className="inline-flex min-w-0 max-w-[52vw] overflow-x-auto overflow-y-hidden rounded-lg border text-[10px]"
           style={{ borderColor: THEME.ink }}
         >
-          {(["NVDA", "TSLA"] as const).map((t) => (
+          {TICKERS.map((t) => (
             <button
               key={t}
               type="button"
               aria-pressed={t === ticker}
               onClick={() => useGameStore.getState().setTicker(t)}
-              className="inline-flex cursor-pointer items-center gap-1 px-2 py-1 font-bold"
+              className="inline-flex cursor-pointer items-center gap-1 whitespace-nowrap px-1.5 py-1 font-bold"
               style={{
                 background: t === ticker ? THEME.ink : THEME.paper,
                 color: t === ticker ? THEME.paper : THEME.ink,
               }}
             >
-              <AssetLogo symbol={t} size={13} />
+              <AssetLogo symbol={t} size={12} />
               <span>{t}</span>
             </button>
           ))}
         </div>
-        <div className="flex items-baseline gap-1.5">
-          <span className="text-xl font-extrabold tracking-tight tabular-nums">
+        <div className="flex items-baseline gap-1">
+          <span className="text-lg font-extrabold tracking-tight tabular-nums">
             ${price > 0 ? price.toFixed(2) : "\u2014"}
           </span>
           {change ? (
-            <span className="text-[10px] font-semibold" style={{ color: THEME.win }}>
+            <span className="text-[9px] font-semibold" style={{ color: THEME.win }}>
               {change}
             </span>
           ) : null}
         </div>
-        <span
-          className="ml-auto rounded border px-1.5 py-0.5 text-[9px] font-extrabold"
-          style={{
-            color: stale ? THEME.loss : THEME.win,
-            borderColor: stale ? THEME.loss : THEME.win,
-          }}
-        >
-          {stale ? "PAUSED" : "LIVE"}
-        </span>
+        <div className="ml-auto flex flex-col items-end leading-none">
+          <span
+            className="rounded border px-1.5 py-0.5 text-[9px] font-extrabold"
+            style={{
+              color: stale ? THEME.loss : THEME.win,
+              borderColor: stale ? THEME.loss : THEME.win,
+            }}
+          >
+            {stale ? "PAUSED" : "LIVE"}
+          </span>
+          <span className="mt-0.5 whitespace-nowrap text-[8px] font-semibold opacity-60">
+            {PERP_PRICE_LABEL}
+          </span>
+        </div>
       </section>
     );
   }
 
   return (
     <section>
-      <div className="mb-5 flex items-center justify-between">
-        <div className="flex gap-1">
-          {(["NVDA", "TSLA"] as const).map((t) => (
+      <div className="mb-5 flex items-center justify-between gap-3">
+        <div className="flex flex-wrap gap-1">
+          {TICKERS.map((t) => (
             <button
               key={t}
               aria-pressed={t === ticker}
@@ -77,12 +83,17 @@ export function TickerRow({ compact = false }: { compact?: boolean }) {
             </button>
           ))}
         </div>
-        <span
-          className="rounded-full border px-2 py-1 text-[10px] font-bold"
-          style={{ color: stale ? THEME.loss : THEME.win }}
-        >
-          {stale ? "PAUSED" : "LIVE"}
-        </span>
+        <div className="flex min-w-0 flex-col items-end gap-1">
+          <span
+            className="rounded-full border px-2 py-1 text-[10px] font-bold"
+            style={{ color: stale ? THEME.loss : THEME.win }}
+          >
+            {stale ? "PAUSED" : "LIVE"}
+          </span>
+          <span className="max-w-full text-right text-[10px] font-medium leading-tight opacity-55">
+            {PERP_PRICE_LABEL}
+          </span>
+        </div>
       </div>
       <p className="text-4xl font-bold tracking-tight tabular-nums">
         ${price > 0 ? price.toFixed(2) : "\u2014"}

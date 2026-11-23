@@ -8,5 +8,7 @@ describe('formatBoardPrice', () => {
     expect(formatBoardPrice(155, .01)).toBe('155.00');
     expect(formatBoardPrice(155.126, .1)).toBe('155.1');
     expect(formatBoardPrice(155.1236, .001)).toBe('155.124');
+    expect(formatBoardPrice(7076, 1.5)).toBe('7076.0');
+    expect(formatBoardPrice(7077.5, 1.5)).toBe('7077.5');
   });
 });

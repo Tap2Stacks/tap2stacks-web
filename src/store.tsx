@@ -5,8 +5,13 @@ import { rejectMessage, type RejectReason } from "./lib/rejectReasons";
 
 import type { Coin, CoinStack } from "./board/types";
 import { addPendingCoin, applyOrderUpdate, stacksFromOpenOrders, expirePending } from "./board/stacks";
+import { PRICE_STEP_BY_TICKER, TICKERS, type Ticker as SupportedTicker } from "./constant/tickers";
 
-export type Ticker = "NVDA" | "TSLA";
+export type Ticker = SupportedTicker;
+
+const initialFeedStale = Object.fromEntries(
+  TICKERS.map((ticker) => [ticker, false]),
+) as Record<Ticker, boolean>;
 
 export interface PricePoint {
   time: number; // timestamp
@@ -154,7 +159,7 @@ interface GameState {
   addPendingCoin: (cellId: string, ticker: string, coin: Coin) => void;
   expirePendingCoins: (nowMs: number) => void;
   ticker: Ticker;
-  feedStale: Record<Ticker, boolean>;
+  feedStale: Record<string, boolean>;
   balance: number;
   serverBalance: number;
   currentPrice: number;
@@ -206,7 +211,7 @@ export const useGameStore = create<GameState>((set) => ({
   addPendingCoin: (cellId, ticker, coin) => set(state => ({ stacks: addPendingCoin(state.stacks, cellId, ticker, coin) })),
   expirePendingCoins: (nowMs) => set(state => { const stacks = expirePending(state.stacks, nowMs); return stacks === state.stacks ? state : { stacks }; }),
   ticker: "NVDA",
-  feedStale: { NVDA: false, TSLA: false },
+  feedStale: initialFeedStale,
   balance: 0,
   serverBalance: 0,
   currentPrice: 0,
@@ -216,7 +221,7 @@ export const useGameStore = create<GameState>((set) => ({
   nextSessionTime: Date.now() + 60000,
   modeIntervalSeconds: 5,
   modePriceStep: 0.03,
-  priceStepByTicker: { NVDA: 0.03, TSLA: 0.05 },
+  priceStepByTicker: { ...PRICE_STEP_BY_TICKER },
   priceByTicker: {},
   historyByTicker: {},
   basePriceByTicker: {},

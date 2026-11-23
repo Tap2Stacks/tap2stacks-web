@@ -17,12 +17,24 @@
     <rect x="252" y="504" width="224" height="224" rx="34" fill="#E4DCF7" stroke="#1D1B18" stroke-width="10" />
     <rect x="504" y="504" width="224" height="224" rx="34" fill="#F5E4AE" stroke="#1D1B18" stroke-width="10" />
 
-    <polyline points="20,560 150,470 260,410 364,340 490,260 616,180 715,125"
+    <!-- Price line routed cleanly above center-cell multiplier text -->
+    <polyline points="18,620 112,562 204,420 296,318 424,318 548,205 646,148 712,92"
       fill="none" stroke="#1D1B18" stroke-width="20" stroke-linecap="round" stroke-linejoin="round" />
-    <circle cx="364" cy="340" r="24" fill="#2F6B34" stroke="#1D1B18" stroke-width="10" />
 
-    <g transform="translate(54, 54) scale(3.6)"><circle cx="16" cy="16" r="16" fill="#76B900"/><path fill="#fff" transform="translate(5 5) scale(.916667)" d="M8.948 8.798v-1.43a6.7 6.7 0 0 1 .424-.018c3.922-.124 6.493 3.374 6.493 3.374s-2.774 3.851-5.75 3.851c-.398 0-.787-.062-1.158-.185v-4.346c1.528.185 1.837.857 2.747 2.385l2.04-1.714s-1.492-1.952-4-1.952a6.016 6.016 0 0 0-.796.035m0-4.735v2.138l.424-.027c5.45-.185 9.01 4.47 9.01 4.47s-4.08 4.964-8.33 4.964c-.37 0-.733-.035-1.095-.097v1.325c.3.035.61.062.91.062 3.957 0 6.82-2.023 9.593-4.408.459.371 2.34 1.263 2.73 1.652-2.633 2.208-8.772 3.984-12.253 3.984-.335 0-.653-.018-.971-.053v1.864H24V4.063zm0 10.326v1.131c-3.657-.654-4.673-4.46-4.673-4.46s1.758-1.944 4.673-2.262v1.237H8.94c-1.528-.186-2.73 1.245-2.73 1.245s.68 2.412 2.739 3.11M2.456 10.9s2.164-3.197 6.5-3.533V6.201C4.153 6.59 0 10.653 0 10.653s2.35 6.802 8.948 7.42v-1.237c-4.84-.6-6.492-5.936-6.492-5.936z"/></g>
-    <g transform="translate(558, 558) scale(3.6)"><circle cx="16" cy="16" r="16" fill="#CC0000"/><path fill="#fff" transform="translate(5 5) scale(.916667)" d="M12 5.362l2.475-3.026s4.245.09 8.471 2.054c-1.082 1.636-3.231 2.438-3.231 2.438-.146-1.439-1.154-1.79-4.354-1.79L12 24 8.619 5.034c-3.18 0-4.188.354-4.335 1.792 0 0-2.146-.795-3.229-2.43C5.28 2.431 9.525 2.34 9.525 2.34L12 5.362l-.004.002H12v-.002zm0-3.899c3.415-.03 7.326.528 11.328 2.28.535-.968.672-1.395.672-1.395C19.625.612 15.528.015 12 0 8.472.015 4.375.61 0 2.349c0 0 .195.525.672 1.396C4.674 1.989 8.585 1.435 12 1.46v.003z"/></g>
-    <text x="364" y="422" text-anchor="middle" font-family="Menlo, Monaco, Consolas, monospace" font-size="60" font-weight="800" fill="#1D1B18">4.5x</text>
+    <!-- Tap coin inside the highlighted center cell, above 4.5x -->
+    
+    <g>
+      <circle cx="367" cy="322" r="44" fill="#1D1B18" />
+      <circle cx="364" cy="318" r="44" fill="#FFE58A" stroke="#1D1B18" stroke-width="6" />
+      <circle cx="364" cy="318" r="31" fill="none" stroke="#E2B23C" stroke-width="4" />
+      <text x="364" y="333" text-anchor="middle" font-family="Menlo, Monaco, Consolas, monospace" font-size="42" font-weight="800" fill="#1D1B18">$</text>
+    </g>
+  
+
+    <!-- Live hit marker on the outgoing path -->
+    <circle cx="548" cy="205" r="20" fill="#2F6B34" stroke="#1D1B18" stroke-width="9" />
+
+    <!-- Unobstructed multiplier readout in center cell -->
+    <text x="364" y="442" text-anchor="middle" font-family="Menlo, Monaco, Consolas, monospace" font-size="60" font-weight="800" fill="#1D1B18">4.5x</text>
   </g>
 </svg>

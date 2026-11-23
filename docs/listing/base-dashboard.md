@@ -9,32 +9,34 @@ This guide contains every field and asset required to register **tap2stacks** on
 | Field | Value | Notes |
 | --- | --- | --- |
 | **App Name** | `tap2stacks` | Current brand name |
-| **Short Description / Tagline** | `Tap live stock price cells on Base Sepolia testnet.` | Concise, <= 60 chars |
-| **Long Description** | `tap2stacks is a real-time stock price target grid game running on Base Sepolia testnet. Pick NVDA, TSLA, AAPL, or SP500, choose a stake in non-monetary test USDC (tUSDC), and tap future 5-second price cells on the live board. Deposits, withdrawals, and faucet claims use Base Sepolia smart contracts with EIP-5792 sponsored calls and verifiable on-chain settlement proofs. Testnet preview only; 18+ and non-US.` | Clearly discloses testnet/non-monetary status and regional/age gates |
+| **Short Description / Tagline** | `Tap live price cells on Base Sepolia testnet.` | Concise, <= 60 chars |
+| **Long Description** | `tap2stacks is a real-time price target grid game running on Base Sepolia testnet. Choose a market feed, set a stake in non-monetary test USDC (tUSDC), and tap future 5-second price cells on the live board. Deposits, withdrawals, and faucet claims use Base Sepolia smart contracts with EIP-5792 sponsored calls and verifiable on-chain settlement proofs. Testnet preview only; no real money; 18+ and non-US.` | Clearly discloses testnet/non-monetary status and regional/age gates |
 | **Category** | `Games` (or `Gaming / Prediction`) | Matches the Base Dashboard category picker |
-| **Tags / Keywords** | `gaming`, `stocks`, `testnet`, `base-sepolia`, `prediction` | Optional discovery tags if prompted |
+| **Tags / Keywords** | `gaming`, `testnet`, `base-sepolia`, `prediction`, `onchain` | Optional discovery tags if prompted |
 | **Website / Home URL** | `https://45-77-250-147.sslip.io` | Controlled by `VITE_PUBLIC_URL`; update in both build env and Base Dashboard if moved to a custom domain |
 | **Network** | `Base Sepolia` (`84532`) | Testnet preview deployment |
 | **Base Builder Code** | `bc_ymo2v08a` | Configured via `VITE_BASE_BUILDER_CODE=bc_ymo2v08a` |
 | **ERC-8021 Data Suffix** | `0x62635f796d6f32763038610b0080218021802180218021802180218021` | Generated automatically by `builderCodeSuffix("bc_ymo2v08a")` |
-| **Support / Contact** | `<the owner's support email or GitHub/X URL>` | Replace before submitting |
+| **Support / Contact** | `<REPLACE_WITH_SUPPORT_EMAIL_OR_URL>` | **Placeholder for the owner:** fill in her support email or contact URL before submitting |
 
-## 2. Visual Assets (`public/brand/`)
+## 2. Visual Assets
 
-Generated deterministically from SVGs by [`scripts/generate-miniapp-images.mjs`](../../scripts/generate-miniapp-images.mjs):
+Brand icon and OpenGraph banner are generated deterministically from SVGs (warm paper, ink, grid, price line, and tap coin — no third-party trademarks) by [`scripts/generate-miniapp-images.mjs`](../../scripts/generate-miniapp-images.mjs):
 
 | Asset | Path | Dimensions & Format | Usage |
 | --- | --- | --- | --- |
 | **App Icon** | `public/brand/icon.png` (`icon.svg`) | `1024x1024` opaque RGB PNG (no transparency) | Base Dashboard app icon, `<link rel="icon">`, `<link rel="apple-touch-icon">` |
 | **OG / Preview Banner** | `public/brand/og.png` (`og.svg`) | `1200x630` RGB PNG | `og:image`, `twitter:image`, Base Dashboard hero/preview |
-| **Screenshot 1** | `public/brand/screenshot-1.png` (`screenshot-1.svg`) | `1284x2778` portrait RGB PNG | Live tap grid + stake chips |
-| **Screenshot 2** | `public/brand/screenshot-2.png` (`screenshot-2.svg`) | `1284x2778` portrait RGB PNG | Base Sepolia testnet wallet, faucet & 1:1 vault |
-| **Screenshot 3** | `public/brand/screenshot-3.png` (`screenshot-3.svg`) | `1284x2778` portrait RGB PNG | Anchored settlement proofs & ERC-8021 attribution |
+| **Screenshot 1 (Live Board)** | `docs/listing/screenshots/1-board.png` | `1284x2778` portrait PNG (live site capture) | Live tap grid + stake chips |
+| **Screenshot 2 (Wallet)** | `docs/listing/screenshots/2-wallet.png` | `1284x2778` portrait PNG (live site capture) | Base Sepolia testnet wallet, faucet & 1:1 vault |
+| **Screenshot 3 (History)** | `docs/listing/screenshots/3-history.png` | `1284x2778` portrait PNG (live site capture) | Tap history & settlement records |
 
-To regenerate SVGs and PNGs after visual edits:
+*(Note: the captured `1284x2778` store screenshots live in this repository at `docs/listing/screenshots/` so they are not served as static files under `public/`.)*
+
+To regenerate `public/brand/icon.png` and `public/brand/og.png` using Playwright's headless shell:
 
 ```bash
-node scripts/generate-miniapp-images.mjs
+PLAYWRIGHT_BROWSERS_PATH=/Users/dev/.local/share/ms-playwright node scripts/generate-miniapp-images.mjs
 ```
 
 ## 3. Build Environment Variables
@@ -56,12 +58,12 @@ VITE_RPC_URL=https://sepolia.base.org
 4. **Fill in the App Listing form** using the table in Section 1 above and upload:
    - Icon: `public/brand/icon.png` (`1024x1024`, opaque PNG)
    - Banner (if requested): `public/brand/og.png` (`1200x630`)
-   - Screenshots: `public/brand/screenshot-1.png`, `screenshot-2.png`, `screenshot-3.png` (`1284x2778`)
-   - Support / Contact URL or email
+   - Screenshots: `docs/listing/screenshots/1-board.png`, `2-wallet.png`, `3-history.png` (`1284x2778`)
+   - Support / Contact: replace `<REPLACE_WITH_SUPPORT_EMAIL_OR_URL>` with the owner's support email or contact URL
 5. **Verify domain & ownership** if prompted by the Base Dashboard (follow the dashboard's domain ownership check or wallet signature prompt for `45-77-250-147.sslip.io`).
 6. **Smoke test inside Coinbase Wallet mobile browser (iPhone 12+ / Android):**
    - Open `https://45-77-250-147.sslip.io` inside Coinbase Wallet's in-app browser.
    - Confirm the wallet picker highlights **Coinbase Wallet (In-app browser wallet)** at the top via EIP-6963 (`com.coinbase.wallet`).
    - Run a faucet claim or deposit on Base Sepolia and verify on `sepolia.basescan.org` that the transaction input calldata ends with `62635f796d6f32763038610b0080218021802180218021802180218021` (and check attribution in Base Dashboard analytics).
    - Confirm top header / bottom nav clear the iOS notch & home bar and left-edge swipe-back still navigates back cleanly.
-7. **Submit for review / listing** in the Base Dashboard. Note that because tap2stacks is a prediction/price-target game, keep the Base Sepolia testnet / non-monetary `Test USDC` framing and the existing 18+ / US geo-block intact; transitioning to real-money mainnet wagering later will require legal/compliance review under Coinbase's Prohibited & Conditional Use Policy and mobile app store rules.
+7. **Submit for review / listing** in the Base Dashboard. Keep the Base Sepolia testnet / non-monetary `Test USDC` ("no real money") framing and the existing 18+ / US geo-block intact; transitioning to real-money mainnet wagering later will require legal/compliance review under Coinbase's Prohibited & Conditional Use Policy and mobile app store rules.

@@ -22,6 +22,7 @@ it("seeds the reference on load but never overwrites a newer live reference or e
     expect(useGameStore.getState().prevDayPx.NVDA).toBe(155);
     live.unmount();
     renderHook(() => usePriceSeries("NVDA"));
-    await act(async () => resolve({ prevDayPx: null, points: [] }));
+    await act(async () => resolve({ prevDayPx: null, points: [], source: "deribit-perp-index" }));
     expect(useGameStore.getState().prevDayPx.NVDA).toBe(155);
+    expect(useGameStore.getState().priceSource).toBe("deribit-perp-index");
 });

@@ -14,6 +14,8 @@ export function usePriceSeries(ticker: string): void {
             const state = useGameStore.getState();
             if (data.prevDayPx !== null && state.prevDayPx[ticker] === reference)
                 state.setPrevDayPx(ticker, data.prevDayPx);
+            if (typeof data.source === "string" && data.source.length > 0)
+                state.setPriceSource(data.source);
         });
         return () => {
             alive = false;

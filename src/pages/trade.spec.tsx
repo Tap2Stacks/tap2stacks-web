@@ -7,7 +7,7 @@ vi.mock("wagmi", () => ({ useAccount: () => ({ address: "0xabc" }) }));
 vi.mock("../board/BoardCanvas", () => ({ BoardCanvas: ({ onTapCell }: {
         onTapCell: (cell: ReturnType<typeof testCell>) => void;
     }) => <button onClick={() => onTapCell(testCell({ timeWindowStart: Date.now() + 20000 }))}>Tap board</button> }));
-beforeEach(() => useGameStore.setState({ ticker: "NVDA", betAmount: 5, currentPrice: 154.68, balance: 0, stacks: {}, feedStale: { NVDA: false, TSLA: false }, serverTimeOffset: 0 }));
+beforeEach(() => useGameStore.setState({ ticker: "NVDA", betAmount: 5, currentPrice: 154.68, balance: 0, stacks: {}, feedStale: { NVDA: false, TSLA: false }, serverTimeOffset: 0, priceSource: null }));
 afterEach(cleanup);
 it("ticker switch calls setTicker; chips start at $5 and select stakes", () => {
     render(<TradePage />);
@@ -29,6 +29,11 @@ it("renders four tickers, the perp label, and four-digit prices", () => {
     }
     expect(screen.getByText("$7076.50")).toBeTruthy();
     expect(screen.getAllByText("Perp price · Hyperliquid trade.xyz").length).toBeGreaterThan(0);
+});
+it("shows the Coinbase Derivatives (Deribit) index label when priceSource is deribit-perp-index", () => {
+    useGameStore.setState({ priceSource: "deribit-perp-index" });
+    render(<TradePage />);
+    expect(screen.getAllByText("Index price · Coinbase Derivatives (Deribit)").length).toBeGreaterThan(0);
 });
 it("keys 1 to 4 select stakes and ignore input focus", () => {
     render(<TradePage />);

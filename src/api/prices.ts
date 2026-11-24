@@ -4,6 +4,7 @@ let warned = false;
 export async function fetchRecentPrices(ticker: string): Promise<{
     prevDayPx: number | null;
     points: PriceSample[];
+    source?: string;
 }> {
     try {
         const response = await fetch(`${BACKEND_URL}/api/prices/recent?ticker=${encodeURIComponent(ticker)}&sinceMs=${Date.now() - 300_000}`);
@@ -16,7 +17,12 @@ export async function fetchRecentPrices(ticker: string): Promise<{
             ts: number;
             price: string;
         }) => ({ ts: Number(p.ts), price: Number(p.price) })).filter((p: PriceSample) => Number.isFinite(p.ts) && Number.isFinite(p.price)).sort((a: PriceSample, b: PriceSample) => a.ts - b.ts);
-        return { prevDayPx: typeof data.prevDayPx === 'number' && Number.isFinite(data.prevDayPx) ? data.prevDayPx : null, points };
+        const source = typeof data.source === 'string' && data.source.length > 0 ? data.source : undefined;
+        return {
+            prevDayPx: typeof data.prevDayPx === 'number' && Number.isFinite(data.prevDayPx) ? data.prevDayPx : null,
+            points,
+            ...(source !== undefined ? { source } : {}),
+        };
     }
     catch {
         if (!warned) {

@@ -155,6 +155,8 @@ function resolveOrderCellId(
 interface GameState {
   prevDayPx: Record<string, number | null>;
   setPrevDayPx: (ticker: string, price: number | null) => void;
+  priceSource: string | null;
+  setPriceSource: (source: string | null) => void;
   stacks: Record<string, CoinStack>;
   addPendingCoin: (cellId: string, ticker: string, coin: Coin) => void;
   expirePendingCoins: (nowMs: number) => void;
@@ -207,6 +209,8 @@ interface GameState {
 export const useGameStore = create<GameState>((set) => ({
   prevDayPx: {},
   setPrevDayPx: (ticker, price) => set(state => ({prevDayPx: {...state.prevDayPx, [ticker]: price}})),
+  priceSource: null,
+  setPriceSource: (source) => set({ priceSource: source }),
   stacks: {},
   addPendingCoin: (cellId, ticker, coin) => set(state => ({ stacks: addPendingCoin(state.stacks, cellId, ticker, coin) })),
   expirePendingCoins: (nowMs) => set(state => { const stacks = expirePending(state.stacks, nowMs); return stacks === state.stacks ? state : { stacks }; }),

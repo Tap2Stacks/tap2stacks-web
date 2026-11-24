@@ -10,3 +10,11 @@ export const PRICE_STEP_BY_TICKER: Record<Ticker, number> = {
 };
 
 export const PERP_PRICE_LABEL = "Perp price · Hyperliquid trade.xyz";
+export const DERIBIT_PRICE_LABEL = "Index price · Coinbase Derivatives (Deribit)";
+
+export function priceLabelForSource(source: string | null | undefined): string {
+  if (source === "deribit-perp-index") {
+    return DERIBIT_PRICE_LABEL;
+  }
+  return PERP_PRICE_LABEL;
+}

@@ -1,5 +1,5 @@
 import { AssetLogo } from "../components/AssetLogo";
-import { PERP_PRICE_LABEL, TICKERS } from "../constant/tickers";
+import { priceLabelForSource, TICKERS } from "../constant/tickers";
 import { useGameStore } from "../store";
 import { formatChange } from "../lib/openingBell";
 import { THEME } from "../ui/theme";
@@ -9,6 +9,8 @@ export function TickerRow({ compact = false }: { compact?: boolean }) {
   const price = useGameStore((s) => s.currentPrice);
   const stale = useGameStore((s) => s.feedStale[s.ticker]);
   const previous = useGameStore((s) => s.prevDayPx[s.ticker] ?? null);
+  const priceSource = useGameStore((s) => s.priceSource);
+  const priceLabel = priceLabelForSource(priceSource);
   const change = formatChange(price, previous);
 
   if (compact) {
@@ -56,7 +58,7 @@ export function TickerRow({ compact = false }: { compact?: boolean }) {
             {stale ? "PAUSED" : "LIVE"}
           </span>
           <span className="mt-0.5 whitespace-nowrap text-[8px] font-semibold opacity-60">
-            {PERP_PRICE_LABEL}
+            {priceLabel}
           </span>
         </div>
       </section>
@@ -91,7 +93,7 @@ export function TickerRow({ compact = false }: { compact?: boolean }) {
             {stale ? "PAUSED" : "LIVE"}
           </span>
           <span className="max-w-full text-right text-[10px] font-medium leading-tight opacity-55">
-            {PERP_PRICE_LABEL}
+            {priceLabel}
           </span>
         </div>
       </div>

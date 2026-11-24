@@ -48,6 +48,7 @@ describe("phone trade page", () => {
       stacks: {},
       feedStale: { NVDA: false, TSLA: false },
       serverTimeOffset: 0,
+      priceSource: null,
       wssKey: "00112233",
       socket: { emit: vi.fn() } as never,
     });
@@ -170,5 +171,12 @@ describe("phone trade page", () => {
     render(<TradePage />);
     expect(screen.getByText("Drop a coin")).toBeTruthy();
     expect(screen.getByText("Your open taps")).toBeTruthy();
+  });
+
+  it("at 390 px shows the Deribit index label when priceSource is deribit-perp-index", () => {
+    setWidth(390);
+    useGameStore.setState({ priceSource: "deribit-perp-index" });
+    render(<TradePage />);
+    expect(screen.getByText("Index price · Coinbase Derivatives (Deribit)")).toBeTruthy();
   });
 });

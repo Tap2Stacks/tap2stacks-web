@@ -487,6 +487,23 @@ export function drawBoard(ctx: CanvasRenderingContext2D, scene: BoardScene): voi
     ctx.rect(0, 0, plotRight, plotBottom);
     ctx.clip();
 
+    // 0. Draw horizontal row grid lines and live-price dashed reference line UNDERNEATH cells
+    //    so cell multipliers on the live price row are never struck through ("-x2-").
+    drawRowGridLines(ctx, guidePrices, v, bp);
+    if (scene.livePrice > 0 && !pannedAway && rawY >= 0 && rawY <= plotBottom) {
+        const dashStart = Math.max(0, Math.min(plotRight, liveX));
+        ctx.save();
+        ctx.strokeStyle = bp.ink;
+        ctx.lineWidth = 1;
+        ctx.setLineDash([3, 5]);
+        ctx.beginPath();
+        ctx.moveTo(dashStart, rawY);
+        ctx.bezierCurveTo(dashStart, rawY, plotRight, rawY, plotRight, rawY);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.restore();
+    }
+
     // 1. Render bounded future tiles using pre-rendered depth sprites & LOD
     const lod = planCellLod(scene.cells, v, step, scene.stacks);
     for (const tile of lod.tiles) {
@@ -502,7 +519,6 @@ export function drawBoard(ctx: CanvasRenderingContext2D, scene: BoardScene): voi
     }
 
     drawNotOpenYetZone(ctx, v, maxQuotedEndTs, bp);
-    drawRowGridLines(ctx, guidePrices, v, bp);
 
     ctx.strokeStyle = bp.ink;
     ctx.lineWidth = 2.5;
@@ -512,16 +528,6 @@ export function drawBoard(ctx: CanvasRenderingContext2D, scene: BoardScene): voi
     flash(ctx, scene, bp);
 
     if (scene.livePrice > 0 && rawY >= 0 && rawY <= plotBottom) {
-        if (!pannedAway) {
-            const dashStart = Math.max(0, Math.min(plotRight, liveX));
-            ctx.setLineDash([3, 5]);
-            ctx.lineWidth = 1;
-            ctx.beginPath();
-            ctx.moveTo(dashStart, rawY);
-            ctx.bezierCurveTo(dashStart, rawY, plotRight, rawY, plotRight, rawY);
-            ctx.stroke();
-            ctx.setLineDash([]);
-        }
         if (liveX >= -16 && liveX <= plotRight + 16) {
             if (!scene.reducedMotion && !pannedAway) {
                 const phase = (v.nowMs % 1600) / 1600;

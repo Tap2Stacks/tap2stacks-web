@@ -212,6 +212,15 @@ describe('drawBoard', () => {
         });
         expect(calls.some(c => c.name === 'fillText' && c.args[0] === 'Not open yet')).toBe(false);
     });
+
+    it('draws the dashed live-price guide underneath future cells so price-row odds labels stay clean', () => {
+        const { ctx, calls } = recordingContext();
+        drawBoard(ctx, scene);
+        const dashIdx = calls.findIndex(c => c.name === 'setLineDash' && Array.isArray(c.args[0]) && (c.args[0] as number[])[0] === 3);
+        const cellLabelIdx = calls.findIndex(c => c.name === 'fillText' && c.args[0] === 'x4.1');
+        expect(dashIdx).toBeGreaterThan(-1);
+        expect(cellLabelIdx).toBeGreaterThan(dashIdx);
+    });
 });
 
 it('drawStack draws a count badge x3 and the total $15', () => {

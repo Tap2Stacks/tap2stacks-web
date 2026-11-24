@@ -81,6 +81,8 @@ export function RunningBar({ ownAddress }: { ownAddress: string | null }) {
     return () => observer.disconnect();
   }, [entries]);
 
+  if (entries.length === 0) return null;
+
   const ownShort = shortAddress(ownAddress);
   const items = [...entries].reverse().map((entry) => (
     <FeedItem key={entry.id} entry={entry} ownShort={ownShort} />

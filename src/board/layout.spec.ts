@@ -3,6 +3,7 @@ import {
   cellRect,
   hitTestCell,
   isLocked,
+  plotHeight,
   plotWidth,
   priceToY,
   timeToX,
@@ -135,5 +136,20 @@ describe("board layout and hit-testing", () => {
     };
     expect(hitTestCell(gutterVp, [edgeCell], 930, 285)).toBe(edgeCell);
     expect(hitTestCell(gutterVp, [edgeCell], 945, 285)).toBeUndefined();
+  });
+
+  it("excludes the reserved bottom time-axis lane from plotHeight and hitTestCell", () => {
+    const laneVp: BoardViewport = { ...viewport, bottomGutter: 20 };
+    expect(plotHeight(laneVp)).toBe(580);
+    expect(priceToY(laneVp, 155)).toBe(290);
+    const lowCell = {
+      id: "bottom-edge",
+      startTs: 15_000,
+      endTs: 20_000,
+      lower: 154.68, // extends below y=580 into bottom time-axis lane
+      upper: 154.73,
+    };
+    expect(hitTestCell(laneVp, [lowCell], 450, 575)).toBe(lowCell);
+    expect(hitTestCell(laneVp, [lowCell], 450, 585)).toBeUndefined();
   });
 });

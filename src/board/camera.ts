@@ -25,6 +25,7 @@ export interface CameraMetrics {
   priceStep: number;
   defaultAheadMs?: number;
   rightGutter?: number;
+  bottomGutter?: number;
   minSeriesPrice?: number;
   maxSeriesPrice?: number;
 }
@@ -40,13 +41,17 @@ function effectivePlotWidth(metrics: Pick<CameraMetrics, "width" | "rightGutter"
   return Math.max(1, metrics.width - (metrics.rightGutter ?? 0));
 }
 
+function effectivePlotHeight(metrics: Pick<CameraMetrics, "height" | "bottomGutter">): number {
+  return Math.max(1, metrics.height - (metrics.bottomGutter ?? 0));
+}
+
 export function baseScaleFor(metrics: CameraMetrics): {
   baseMsPerPx: number;
   basePricePerPx: number;
   minTimeZoom: number;
 } {
   const plotW = effectivePlotWidth(metrics);
-  const height = Math.max(1, metrics.height);
+  const plotH = effectivePlotHeight(metrics);
   const futureFraction = Math.max(0.1, 1 - metrics.nowFraction);
   const aheadMs =
     metrics.defaultAheadMs !== undefined && Number.isFinite(metrics.defaultAheadMs) && metrics.defaultAheadMs > 0
@@ -56,7 +61,7 @@ export function baseScaleFor(metrics: CameraMetrics): {
   const maxMsPerPx = (HISTORY_LIMIT_MS + FUTURE_LIMIT_MS) / plotW;
   const minTimeZoom = Math.min(1, baseMsPerPx / maxMsPerPx);
   const step = Number.isFinite(metrics.priceStep) && metrics.priceStep > 0 ? metrics.priceStep : 0.03;
-  const basePricePerPx = (step * Math.max(1, metrics.visibleRows)) / height;
+  const basePricePerPx = (step * Math.max(1, metrics.visibleRows)) / plotH;
   return { baseMsPerPx, basePricePerPx, minTimeZoom };
 }
 
@@ -351,7 +356,7 @@ export class BoardCamera {
     const anchorTs = this.rawViewNowMs + dxFromNow * prevMsPerPx;
     const nextViewNowMs = anchorTs - dxFromNow * nextMsPerPx;
 
-    const dyFromMid = anchorY - metrics.height / 2;
+    const dyFromMid = anchorY - effectivePlotHeight(metrics) / 2;
     const anchorPrice = this.rawCenterPrice - dyFromMid * prevPricePerPx;
     const nextCenterPrice = anchorPrice + dyFromMid * nextPricePerPx;
 
@@ -419,7 +424,9 @@ export class BoardCamera {
   ): CameraStepResult {
     const dt = Math.max(0, Math.min(100, dtMs));
     const plotW = effectivePlotWidth(metrics);
+    const plotH = effectivePlotHeight(metrics);
     const rightGutter = metrics.rightGutter ?? 0;
+    const bottomGutter = metrics.bottomGutter ?? 0;
     const { baseMsPerPx, basePricePerPx, minTimeZoom } = baseScaleFor(metrics);
     let moving = false;
 
@@ -460,6 +467,7 @@ export class BoardCamera {
           centerPrice,
           pricePerPx,
           rightGutter,
+          bottomGutter,
         },
         moving,
         isLive: true,
@@ -477,7 +485,7 @@ export class BoardCamera {
     const pBounds = priceBounds(
       liveCenterPrice,
       metrics.priceStep,
-      pricePerPx * metrics.height,
+      pricePerPx * plotH,
       metrics.minSeriesPrice,
       metrics.maxSeriesPrice,
     );
@@ -496,6 +504,7 @@ export class BoardCamera {
           centerPrice: liveCenterPrice,
           pricePerPx,
           rightGutter,
+          bottomGutter,
         },
         moving: false,
         isLive: true,
@@ -509,7 +518,7 @@ export class BoardCamera {
 
     if (this.dragging) {
       const timeLimit = plotW * RUBBER_BAND_FRACTION * msPerPx;
-      const priceLimit = metrics.height * RUBBER_BAND_FRACTION * pricePerPx;
+      const priceLimit = plotH * RUBBER_BAND_FRACTION * pricePerPx;
       const resistedOffset = applyEdgeResistance(
         viewNowMs - nowMs,
         tBounds.minOffsetMs,
@@ -533,6 +542,7 @@ export class BoardCamera {
           centerPrice: resistedPrice,
           pricePerPx,
           rightGutter,
+          bottomGutter,
         },
         moving: true,
         isLive: false,
@@ -627,6 +637,7 @@ export class BoardCamera {
         centerPrice,
         pricePerPx,
         rightGutter,
+        bottomGutter,
       },
       moving,
       isLive: false,

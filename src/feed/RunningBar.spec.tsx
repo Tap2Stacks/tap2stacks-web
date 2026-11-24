@@ -48,3 +48,12 @@ it("uses an ink tape with paper text and a highlighted big win", async () => {
   expect(big.style.background).toBe("rgb(255, 216, 77)");
   expect(big.style.color).toBe("rgb(29, 27, 24)");
 });
+
+it("stays hidden when there are no recent trade entries and renders once an item arrives", async () => {
+  const { getRecentFeed } = await import("../api/feed");
+  vi.mocked(getRecentFeed).mockResolvedValueOnce([]);
+  render(<RunningBar ownAddress={null} />);
+  expect(screen.queryByLabelText("Recent trades")).toBeNull();
+  await waitFor(() => expect(getRecentFeed).toHaveBeenCalled());
+  expect(screen.queryByLabelText("Recent trades")).toBeNull();
+});

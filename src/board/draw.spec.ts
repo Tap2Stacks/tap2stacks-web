@@ -166,6 +166,52 @@ describe('drawBoard', () => {
         expect(leftMarker).toBeDefined();
         expect(Number(leftMarker?.args[1])).toBeLessThan(60);
     });
+
+    it('suppresses half-cut odds labels and fades tiles clipped by the right gutter', () => {
+        const { ctx, calls } = recordingContext();
+        // plotWidth = 942, nowX = 942 * 0.3 = 282.6; cell at x = 892.6..992.6 is 50% clipped at right gutter
+        const clippedCell = testCell({
+            id: 'clipped',
+            multiplier: 4.1,
+            timeWindowStart: 10000 + Math.round((892.6 - 282.6) * 50),
+            timeWindowEnd: 10000 + Math.round((992.6 - 282.6) * 50),
+        });
+        drawBoard(ctx, {
+            ...scene,
+            viewport: { ...scene.viewport, rightGutter: 58 },
+            cells: [clippedCell],
+        });
+        expect(calls.some(c => c.name === 'fillText' && c.args[0] === 'x4.1')).toBe(false);
+        // Tile still draws with reduced edge fade alpha
+        const tileFill = calls.find(c => c.name === 'fillRect' && Number(c.args[0]) > 880 && Number(c.args[2]) < 120);
+        expect(tileFill).toBeDefined();
+        expect(tileFill!.alpha).toBeLessThan(0.5);
+    });
+
+    it('places NOW and time axis labels in a dedicated bottom lane strictly below the cell plot area', () => {
+        const { ctx, calls } = recordingContext();
+        drawBoard(ctx, {
+            ...scene,
+            viewport: { ...scene.viewport, rightGutter: 58, bottomGutter: 20 },
+        });
+        // Plot clip height stops at 580 (height - bottomGutter)
+        expect(calls.some(c => c.name === 'rect' && c.args[0] === 0 && c.args[1] === 0 && c.args[2] === 942 && c.args[3] === 580)).toBe(true);
+        // NOW label sits inside y in (580, 600) — never overlapping bottom row cells
+        const nowLabel = calls.find(c => c.name === 'fillText' && c.args[0] === 'NOW');
+        expect(nowLabel).toBeDefined();
+        expect(Number(nowLabel?.args[2])).toBeGreaterThan(580);
+        expect(Number(nowLabel?.args[2])).toBeLessThan(600);
+    });
+
+    it('omits Not open yet when 24 quoted windows already span the full 2-minute horizon', () => {
+        const { ctx, calls } = recordingContext();
+        drawBoard(ctx, {
+            ...scene,
+            viewport: { ...scene.viewport, msPerPx: 180, rightGutter: 58 },
+            maxQuotedEndTs: scene.viewport.nowMs + 120_000,
+        });
+        expect(calls.some(c => c.name === 'fillText' && c.args[0] === 'Not open yet')).toBe(false);
+    });
 });
 
 it('drawStack draws a count badge x3 and the total $15', () => {

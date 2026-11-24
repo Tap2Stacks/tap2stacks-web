@@ -1,7 +1,7 @@
 import type { CellData } from '../store';
 import { THEME } from '../ui/theme';
 import { monotoneSegments, type Pt } from './curve';
-import { cellRect, plotWidth, priceToY, timeToX, xToTime, type BoardViewport } from './layout';
+import { cellRect, plotHeight, plotWidth, priceToY, timeToX, xToTime, type BoardViewport } from './layout';
 import { cellFade } from './fade';
 import { formatBoardPrice } from './priceFormat';
 import { stackTotals } from './stacks';
@@ -55,6 +55,11 @@ export function bounds(cell: CellData) {
     return { startTs: cell.timeWindowStart, endTs: cell.timeWindowEnd, lower: Number(cell.original.lowerPrice), upper: Number(cell.original.upperPrice) };
 }
 
+function smoothstep(edge0: number, edge1: number, x: number): number {
+    const t = Math.max(0, Math.min(1, (x - edge0) / Math.max(1e-6, edge1 - edge0)));
+    return t * t * (3 - 2 * t);
+}
+
 function drawTile(
     ctx: CanvasRenderingContext2D,
     tile: RenderTile,
@@ -68,8 +73,21 @@ function drawTile(
 ) {
     const r = cellRect(v, tile);
     const plotRight = plotWidth(v);
-    if (r.x + r.w < 0 || r.x > plotRight || r.y + r.h < 0 || r.y > v.height)
+    const plotBottom = plotHeight(v);
+    if (r.x + r.w <= 0 || r.x >= plotRight || r.y + r.h <= 0 || r.y >= plotBottom)
         return;
+
+    // Fade partially-clipped rightmost columns smoothly into the right gutter and
+    // suppress half-cut odds labels ("x4") until the tile is almost fully inside the plot.
+    const visW = Math.min(r.x + r.w, plotRight) - Math.max(r.x, 0);
+    const visFracX = visW / Math.max(1, r.w);
+    const clippedRight = r.x + r.w > plotRight + 0.5;
+    const clippedLeft = r.x < -0.5;
+    if (clippedRight && visFracX < 0.15) return;
+    const rightEdgeFade = clippedRight ? smoothstep(0.15, 0.92, visFracX) : 1;
+
+    const visH = Math.min(r.y + r.h, plotBottom) - Math.max(r.y, 0);
+    const visFracY = visH / Math.max(1, r.h);
 
     const visibleAheadMs = Math.max(0, plotRight * (1 - v.nowFraction) * v.msPerPx);
     const fade = cellFade({
@@ -86,7 +104,7 @@ function drawTile(
     const pal = tile.locked
         ? paletteForBucket(LOCKED_BUCKET, mode)
         : cellPalette(tile.multiplier, mode);
-    const tileAlpha = tile.locked ? 0.3 : fade.tintAlpha;
+    const tileAlpha = (tile.locked ? 0.3 : fade.tintAlpha) * rightEdgeFade;
     const sprite = spriteCache.get(pal.bucket, r.w, r.h, dpr, mode);
 
     ctx.globalAlpha = tileAlpha;
@@ -102,10 +120,24 @@ function drawTile(
         renderCellTile(ctx, r.x, r.y, r.w, r.h, pal, false);
     }
 
-    if (textMode !== 'none') {
-        const fontSize = textMode === 'compact' ? (r.w < 29 ? 9.5 : 10) : r.w < 44 ? 11 : 12;
+    const canShowText =
+        textMode !== 'none' &&
+        (!clippedRight || visFracX >= 0.85) &&
+        (!clippedLeft || visFracX >= 0.85) &&
+        visFracY >= 0.7;
+
+    if (canShowText) {
+        const textEdgeFade = clippedRight ? smoothstep(0.85, 0.98, visFracX) : 1;
+        const fontSize =
+            textMode === 'micro'
+                ? 8.5
+                : textMode === 'compact'
+                    ? (r.w < 29 ? 9.5 : 10)
+                    : r.w < 44
+                        ? 11
+                        : 12;
         const weight = tile.locked ? 400 : fade.fontWeight;
-        ctx.globalAlpha = tile.locked ? 0.3 : fade.textAlpha;
+        ctx.globalAlpha = (tile.locked ? 0.3 : fade.textAlpha) * textEdgeFade;
         ctx.fillStyle = bp.ink;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
@@ -152,7 +184,7 @@ function collectGuidePrices(cells: CellData[], v: BoardViewport, step: number): 
     );
     // When panned into pure history without visible cells, synthesize clean price step levels
     if (prices.size === 0 && step > 0 && v.centerPrice > 0) {
-        const halfSpan = (v.height / 2) * v.pricePerPx;
+        const halfSpan = (plotHeight(v) / 2) * v.pricePerPx;
         const minLevel = Math.floor((v.centerPrice - halfSpan) / step);
         const maxLevel = Math.ceil((v.centerPrice + halfSpan) / step);
         const stride = Math.max(1, Math.ceil((maxLevel - minLevel) / 40));
@@ -170,11 +202,12 @@ function drawRowGridLines(
     bp: BoardPalette,
 ): void {
     const right = plotWidth(v);
+    const bottom = plotHeight(v);
     ctx.fillStyle = bp.ink;
     ctx.globalAlpha = bp.guideAlpha;
     for (const price of prices) {
         const y = priceToY(v, price);
-        if (y >= 0 && y <= v.height) {
+        if (y >= 0 && y <= bottom) {
             ctx.fillRect(0, y, right, 0.5);
         }
     }
@@ -193,6 +226,7 @@ function drawPriceAxisLabels(
     bp: BoardPalette,
     avoidLeftY: number | null,
 ): void {
+    const bottom = plotHeight(v);
     ctx.save();
     ctx.font = `10px ${THEME.font}`;
     ctx.textAlign = 'left';
@@ -200,7 +234,7 @@ function drawPriceAxisLabels(
     let lastY = -Infinity;
     for (const price of prices) {
         const y = priceToY(v, price);
-        if (y < 8 || y > v.height - 8 || y - lastY < 28) continue;
+        if (y < 8 || y > bottom - 8 || y - lastY < 28) continue;
         if (avoidLeftY !== null && Math.abs(y - avoidLeftY) < 16) continue;
         const label = formatBoardPrice(price, step);
         const measured = ctx.measureText?.(label)?.width;
@@ -225,17 +259,19 @@ function drawNotOpenYetZone(
     maxQuotedEndTs: number,
     bp: BoardPalette,
 ) {
+    // Only render beyond the last quoted future window when quotes exist
+    if (maxQuotedEndTs <= v.nowMs) return;
     const plotRight = plotWidth(v);
+    const plotBottom = plotHeight(v);
     const nowX = timeToX(v, v.nowMs);
-    const quoteEndTs = Math.max(v.nowMs, maxQuotedEndTs);
-    const startX = Math.max(0, Math.max(nowX, timeToX(v, quoteEndTs)));
+    const startX = Math.max(0, Math.max(nowX, timeToX(v, maxQuotedEndTs)));
     const futureEdgeX = Math.min(plotRight, timeToX(v, v.nowMs + FUTURE_LIMIT_MS));
     if (futureEdgeX - startX < 4) return;
 
     ctx.save();
     ctx.fillStyle = bp.ink;
     ctx.globalAlpha = bp.notOpenWashAlpha;
-    ctx.fillRect(startX, 0, futureEdgeX - startX, v.height);
+    ctx.fillRect(startX, 0, futureEdgeX - startX, plotBottom);
 
     // Subtle dashed vertical divider at the quoted horizon (uses bezierCurveTo, never lineTo)
     if (startX > 0 && startX < plotRight) {
@@ -245,7 +281,7 @@ function drawNotOpenYetZone(
         ctx.setLineDash([4, 4]);
         ctx.beginPath();
         ctx.moveTo(startX, 0);
-        ctx.bezierCurveTo(startX, 0, startX, v.height, startX, v.height);
+        ctx.bezierCurveTo(startX, 0, startX, plotBottom, startX, plotBottom);
         ctx.stroke();
         ctx.setLineDash([]);
     }
@@ -258,15 +294,33 @@ function drawNotOpenYetZone(
         ctx.font = `600 11px ${THEME.font}`;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        ctx.fillText('Not open yet', cx, v.height / 2);
+        ctx.fillText('Not open yet', cx, plotBottom / 2);
     }
     ctx.restore();
 }
 
-function drawTimeTicks(ctx: CanvasRenderingContext2D, v: BoardViewport, bp: BoardPalette) {
+/**
+ * Draws the time axis inside its dedicated bottom lane (when bottomGutter > 0)
+ * so NOW and relative time labels never overlap the bottom row of cells.
+ */
+function drawTimeAxis(ctx: CanvasRenderingContext2D, v: BoardViewport, bp: BoardPalette) {
     const plotRight = plotWidth(v);
-    const leftBound = 56;
-    const rightBound = plotRight - 10;
+    const plotBottom = plotHeight(v);
+    const laneH = v.bottomGutter ?? 0;
+
+    if (laneH > 0) {
+        ctx.save();
+        ctx.fillStyle = bp.surface;
+        ctx.globalAlpha = 1;
+        ctx.fillRect(0, plotBottom, v.width, laneH);
+        ctx.fillStyle = bp.ink;
+        ctx.globalAlpha = 0.12;
+        ctx.fillRect(0, plotBottom, v.width, 1);
+        ctx.restore();
+    }
+
+    const leftBound = laneH > 0 ? 18 : 56;
+    const rightBound = plotRight - 14;
     if (rightBound <= leftBound) return;
     const leftTs = xToTime(v, leftBound);
     const rightTs = xToTime(v, rightBound);
@@ -275,7 +329,7 @@ function drawTimeTicks(ctx: CanvasRenderingContext2D, v: BoardViewport, bp: Boar
     const candidates = [5_000, 10_000, 15_000, 30_000, 60_000];
     let stepMs = 60_000;
     for (const c of candidates) {
-        if (c / v.msPerPx >= 72) {
+        if (c / v.msPerPx >= 64) {
             stepMs = c;
             break;
         }
@@ -285,12 +339,12 @@ function drawTimeTicks(ctx: CanvasRenderingContext2D, v: BoardViewport, bp: Boar
     const maxOffset = Math.min(FUTURE_LIMIT_MS, Math.floor((rightTs - v.nowMs) / stepMs) * stepMs);
     if (minOffset > maxOffset) return;
 
+    const labelY = laneH > 0 ? plotBottom + laneH / 2 + 1 : v.height - 6;
+
     ctx.save();
     ctx.fillStyle = bp.ink;
-    ctx.font = `500 9px ${THEME.font}`;
     ctx.textAlign = 'center';
-    ctx.textBaseline = 'bottom';
-    ctx.globalAlpha = 0.45;
+    ctx.textBaseline = laneH > 0 ? 'middle' : 'bottom';
 
     for (let offset = minOffset; offset <= maxOffset; offset += stepMs) {
         const x = timeToX(v, v.nowMs + offset);
@@ -307,7 +361,13 @@ function drawTimeTicks(ctx: CanvasRenderingContext2D, v: BoardViewport, bp: Boar
                     ? `${sign}${Math.floor(absSec / 60)}m${absSec % 60}s`
                     : `${sign}${absSec}s`;
         }
-        ctx.fillText(label, x, v.height - 6);
+        if (laneH > 0) {
+            ctx.globalAlpha = offset === 0 ? 0.4 : 0.18;
+            ctx.fillRect(x - 0.5, plotBottom, 1, 3);
+        }
+        ctx.font = `${offset === 0 ? '700' : '500'} 9px ${THEME.font}`;
+        ctx.globalAlpha = offset === 0 ? 0.85 : 0.48;
+        ctx.fillText(label, x, labelY);
     }
     ctx.restore();
 }
@@ -323,9 +383,10 @@ function drawLiveAxisMarker(
     rawY: number,
 ): void {
     const plotRight = plotWidth(v);
+    const plotBottom = plotHeight(v);
     const gutter = v.rightGutter ?? 0;
     const priceText = formatBoardPrice(livePrice, step);
-    const tagY = Math.max(12, Math.min(v.height - 12, rawY));
+    const tagY = Math.max(12, Math.min(plotBottom - 12, rawY));
 
     ctx.save();
     if (!pannedAway) {
@@ -357,7 +418,7 @@ function drawLiveAxisMarker(
         markerText = `${priceText}→`;
     } else if (rawY < 12) {
         markerText = `↑${priceText}`;
-    } else if (rawY > v.height - 12) {
+    } else if (rawY > plotBottom - 12) {
         markerText = `↓${priceText}`;
     } else {
         markerText = liveX >= plotRight * v.nowFraction ? `${priceText}→` : `←${priceText}`;
@@ -402,6 +463,7 @@ export function drawBoard(ctx: CanvasRenderingContext2D, scene: BoardScene): voi
     const spriteCache = scene.spriteCache ?? sharedCellSpriteCache;
     const step = scene.priceStep ?? 0.01;
     const plotRight = plotWidth(v);
+    const plotBottom = plotHeight(v);
     const gutter = v.rightGutter ?? 0;
 
     ctx.save();
@@ -419,10 +481,10 @@ export function drawBoard(ctx: CanvasRenderingContext2D, scene: BoardScene): voi
     const rawY = scene.livePrice > 0 ? priceToY(v, scene.livePrice) : -1;
     const pannedAway = scene.isFollowing === false || liveX < 0 || liveX > plotRight;
 
-    // Clip all chart content (cells, stacks, guides, curve, live dot) strictly before the right gutter
+    // Clip all chart content strictly inside [0, plotRight] x [0, plotBottom]
     ctx.save();
     ctx.beginPath();
-    ctx.rect(0, 0, plotRight, v.height);
+    ctx.rect(0, 0, plotRight, plotBottom);
     ctx.clip();
 
     // 1. Render bounded future tiles using pre-rendered depth sprites & LOD
@@ -441,7 +503,6 @@ export function drawBoard(ctx: CanvasRenderingContext2D, scene: BoardScene): voi
 
     drawNotOpenYetZone(ctx, v, maxQuotedEndTs, bp);
     drawRowGridLines(ctx, guidePrices, v, bp);
-    drawTimeTicks(ctx, v, bp);
 
     ctx.strokeStyle = bp.ink;
     ctx.lineWidth = 2.5;
@@ -450,7 +511,7 @@ export function drawBoard(ctx: CanvasRenderingContext2D, scene: BoardScene): voi
     curve(ctx, scene.line);
     flash(ctx, scene, bp);
 
-    if (scene.livePrice > 0 && rawY >= 0 && rawY <= v.height) {
+    if (scene.livePrice > 0 && rawY >= 0 && rawY <= plotBottom) {
         if (!pannedAway) {
             const dashStart = Math.max(0, Math.min(plotRight, liveX));
             ctx.setLineDash([3, 5]);
@@ -486,14 +547,17 @@ export function drawBoard(ctx: CanvasRenderingContext2D, scene: BoardScene): voi
         ctx.save();
         ctx.globalAlpha = 0.12;
         ctx.fillStyle = bp.ink;
-        ctx.fillRect(plotRight, 0, 1, v.height);
+        ctx.fillRect(plotRight, 0, 1, plotBottom);
         ctx.restore();
     }
+
+    // Dedicated bottom time-axis lane (never overlaps bottom row cells)
+    drawTimeAxis(ctx, v, bp);
 
     // Draw left price-axis labels ABOVE the price line with surface backing chips
     const avoidLeftY =
         scene.livePrice > 0 && pannedAway && liveX < 0
-            ? Math.max(12, Math.min(v.height - 12, rawY))
+            ? Math.max(12, Math.min(plotBottom - 12, rawY))
             : null;
     drawPriceAxisLabels(ctx, guidePrices, v, step, bp, avoidLeftY);
 

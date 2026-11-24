@@ -84,4 +84,23 @@ describe("planCellLod", () => {
     expect(plan.tiles).toHaveLength(1);
     expect(plan.tiles[0].startTs).toBe(15_000);
   });
+
+  it("caps 24x20 NVDA cells smoothly on 375 px phone and uses micro odds labels at ~60 s default zoom", () => {
+    const nvdaPhone60s: BoardViewport = {
+      width: 375,
+      height: 536,
+      nowMs: 10_000,
+      nowFraction: 0.35,
+      msPerPx: 60_000 / (325 * 0.65), // 60 s ahead across 211.25 px -> 5s col = 17.6 px
+      centerPrice: 155,
+      pricePerPx: (0.03 * 14) / 516,
+      rightGutter: 50,
+      bottomGutter: 20,
+    };
+    const cells = makeGrid(24, 20);
+    const plan = planCellLod(cells, nvdaPhone60s, 0.03, {});
+    expect(plan.merged).toBe(false);
+    expect(plan.textMode).toBe("micro");
+    expect(plan.tiles.length).toBeLessThanOrEqual(MAX_DRAWN_CELLS);
+  });
 });

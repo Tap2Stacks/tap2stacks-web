@@ -10,11 +10,18 @@ export interface BoardViewport {
   pricePerPx: number;
   /** Reserved right-edge gutter (CSS px) for the live price tag / edge marker. Defaults to 0. */
   rightGutter?: number;
+  /** Reserved bottom lane (CSS px) for the time axis ticks / NOW label. Defaults to 0. */
+  bottomGutter?: number;
 }
 
 /** Usable chart width excluding the reserved right-edge price-tag gutter. */
 export function plotWidth(v: Pick<BoardViewport, "width" | "rightGutter">): number {
   return Math.max(1, v.width - (v.rightGutter ?? 0));
+}
+
+/** Usable chart height excluding the reserved bottom time-axis lane. */
+export function plotHeight(v: Pick<BoardViewport, "height" | "bottomGutter">): number {
+  return Math.max(1, v.height - (v.bottomGutter ?? 0));
 }
 
 /** Maps a timestamp to canvas x with viewNowMs (or nowMs) at nowFraction of plotWidth. */
@@ -29,14 +36,14 @@ export function xToTime(v: BoardViewport, x: number): number {
   return originMs + (x - plotWidth(v) * v.nowFraction) * v.msPerPx;
 }
 
-/** Maps a price to canvas y with centerPrice at vertical center. */
+/** Maps a price to canvas y with centerPrice at vertical center of plotHeight. */
 export function priceToY(v: BoardViewport, price: number): number {
-  return v.height / 2 - (price - v.centerPrice) / v.pricePerPx;
+  return plotHeight(v) / 2 - (price - v.centerPrice) / v.pricePerPx;
 }
 
 /** Inverse of priceToY: maps canvas y back to a price. */
 export function yToPrice(v: BoardViewport, y: number): number {
-  return v.centerPrice - (y - v.height / 2) * v.pricePerPx;
+  return v.centerPrice - (y - plotHeight(v) / 2) * v.pricePerPx;
 }
 
 export function cellRect(
@@ -55,11 +62,13 @@ export function cellRect(
   };
 }
 
-/** Returns the cell under (x, y), or undefined in the past area (left of nowMs) or right gutter. */
+/** Returns the cell under (x, y), or undefined in the past area, right gutter, or bottom time-axis lane. */
 export function hitTestCell<
   T extends { startTs: number; endTs: number; lower: number; upper: number },
 >(v: BoardViewport, cells: T[], x: number, y: number): T | undefined {
-  if (x < timeToX(v, v.nowMs) || x >= plotWidth(v)) return undefined;
+  if (x < timeToX(v, v.nowMs) || x >= plotWidth(v) || y < 0 || y >= plotHeight(v)) {
+    return undefined;
+  }
   for (const cell of cells) {
     const r = cellRect(v, cell);
     if (

@@ -1,5 +1,5 @@
 import type { CellData } from "../store";
-import { plotWidth, priceToY, timeToX, type BoardViewport } from "./layout";
+import { plotHeight, plotWidth, priceToY, timeToX, type BoardViewport } from "./layout";
 
 export function visibleCells(
   cells: CellData[],
@@ -7,6 +7,7 @@ export function visibleCells(
   viewport: BoardViewport,
 ): CellData[] {
   const right = plotWidth(viewport);
+  const bottom = plotHeight(viewport);
   return cells.filter((cell) => {
     if (cell.original.ticker !== ticker) return false;
     if (
@@ -17,6 +18,6 @@ export function visibleCells(
     }
     const yTop = priceToY(viewport, Number(cell.original.upperPrice));
     const yBottom = priceToY(viewport, Number(cell.original.lowerPrice));
-    return Math.max(yTop, yBottom) > 0 && Math.min(yTop, yBottom) < viewport.height;
+    return Math.max(yTop, yBottom) > 0 && Math.min(yTop, yBottom) < bottom;
   });
 }

@@ -2,8 +2,8 @@ import { useGameStore, type CellData } from '../store';
 import { bounds, drawBoard, SETTLEMENT_DURATION_MS, type BoardScene, type BoardThemeMode } from './draw';
 import { createChartClock } from './clock';
 import { createSmoothValue } from './smooth';
-import { cellRect, hitTestCell, isLocked, plotWidth, priceToY, timeToX, xToTime, type BoardViewport } from './layout';
-import { boardScale } from './boardScale';
+import { cellRect, hitTestCell, isLocked, plotHeight, plotWidth, priceToY, timeToX, xToTime, type BoardViewport } from './layout';
+import { boardScale, EXTENDED_HORIZON_THRESHOLD_MS } from './boardScale';
 import { PHONE_BREAKPOINT } from '../shell/useIsPhone';
 import { createDrawnSeries, decimateVisibleLine } from './drawnSeries';
 import { visibleCells } from './retainedCells';
@@ -39,6 +39,7 @@ export class BoardRuntime {
     private dirty = true;
     private previous?: Parameters<typeof shouldRedraw>[0];
     private lastTicker = '';
+    private extendedHorizon = false;
     private lastCells?: CellData[];
     private lastStacks?: State['stacks'];
     private lastTs = 0;
@@ -163,7 +164,7 @@ export class BoardRuntime {
         const rect = cellRect(v, bounds(cell));
         const x = rect.x + rect.w / 2;
         const y = rect.y + rect.h / 2;
-        if (x < 0 || x > plotWidth(v) || y < 0 || y > v.height) return null;
+        if (x < 0 || x > plotWidth(v) || y < 0 || y > plotHeight(v)) return null;
         const client = this.el.getBoundingClientRect();
         return { x: client.left + x * client.width / v.width, y: client.top + y * client.height / v.height };
     }
@@ -217,6 +218,7 @@ export class BoardRuntime {
             this.drawn.reset();
             this.center.reset();
             this.camera.reset();
+            this.extendedHorizon = false;
             this.lastTs = 0;
             this.lastTicker = state.ticker;
             this.dirty = true;
@@ -245,8 +247,16 @@ export class BoardRuntime {
             if (Number.isFinite(lo) && lo < minSeriesPrice) minSeriesPrice = lo;
             if (Number.isFinite(hi) && hi > maxSeriesPrice) maxSeriesPrice = hi;
         }
+        if (maxQuotedEndTs - now > EXTENDED_HORIZON_THRESHOLD_MS) {
+            this.extendedHorizon = true;
+        }
 
-        const scale = boardScale(this.size.width, this.size.height, window.innerWidth < PHONE_BREAKPOINT);
+        const scale = boardScale(
+            this.size.width,
+            this.size.height,
+            window.innerWidth < PHONE_BREAKPOINT,
+            this.extendedHorizon ? 120_000 : 0,
+        );
         const metrics: CameraMetrics = {
             width: this.size.width,
             height: this.size.height,
@@ -255,6 +265,7 @@ export class BoardRuntime {
             priceStep: state.modePriceStep,
             defaultAheadMs: scale.defaultAheadMs,
             rightGutter: scale.rightGutter,
+            bottomGutter: scale.bottomGutter,
             minSeriesPrice: Number.isFinite(minSeriesPrice) ? minSeriesPrice : undefined,
             maxSeriesPrice: Number.isFinite(maxSeriesPrice) ? maxSeriesPrice : undefined,
         };

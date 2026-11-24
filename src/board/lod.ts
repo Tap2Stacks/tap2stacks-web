@@ -1,5 +1,5 @@
 import type { CellData } from "../store";
-import { cellRect, isLocked, type BoardViewport } from "./layout";
+import { cellRect, isLocked, plotHeight, plotWidth, type BoardViewport } from "./layout";
 import type { CoinStack } from "./types";
 import { impliedProbability } from "./cellColor";
 
@@ -7,7 +7,7 @@ export const MAX_DRAWN_CELLS = 240;
 export const MIN_TILE_W_PX = 14;
 export const MIN_TILE_H_PX = 10;
 
-export type CellTextMode = "full" | "compact" | "none";
+export type CellTextMode = "full" | "compact" | "micro" | "none";
 
 export interface RenderTile {
   startTs: number;
@@ -31,11 +31,12 @@ export interface CellLodPlan {
 export function textModeForSize(w: number, h: number): CellTextMode {
   if (w >= 34 && h >= 18) return "full";
   if (w >= 20 && h >= 14) return "compact";
+  if (w >= 15 && h >= 14) return "micro";
   return "none";
 }
 
 export function formatLodMultiplier(multiplier: number, mode: CellTextMode): string {
-  if (mode === "compact" && multiplier >= 10) {
+  if (mode === "micro" || (mode === "compact" && multiplier >= 10)) {
     return `x${Math.round(multiplier)}`;
   }
   return `x${multiplier.toFixed(1)}`;
@@ -52,6 +53,8 @@ export function planCellLod(
   priceStep: number,
   _stacks: Record<string, CoinStack>,
 ): CellLodPlan {
+  const plotRight = plotWidth(viewport);
+  const plotBottom = plotHeight(viewport);
   const future: CellData[] = [];
   for (const cell of cells) {
     if (cell.timeWindowEnd <= viewport.nowMs || cell.status === "past") continue;
@@ -61,7 +64,7 @@ export function planCellLod(
       lower: Number(cell.original.lowerPrice),
       upper: Number(cell.original.upperPrice),
     });
-    if (r.x + r.w < 0 || r.x > viewport.width || r.y + r.h < 0 || r.y > viewport.height) {
+    if (r.x + r.w < 0 || r.x > plotRight || r.y + r.h < 0 || r.y > plotBottom) {
       continue;
     }
     future.push(cell);

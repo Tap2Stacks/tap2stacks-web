@@ -1,129 +1,22 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630">
-  <rect width="1200" height="630" fill="#F4EBE0" />
-  <rect x="58" y="58" width="1104" height="534" rx="28" fill="#1D1B18" />
-  <rect x="44" y="44" width="1104" height="534" rx="28" fill="#F4EBE0" stroke="#1D1B18" stroke-width="5" />
-
-  <rect x="92" y="92" width="320" height="44" rx="10" fill="#1D1B18" />
-  <text x="252" y="121" text-anchor="middle" font-family="Menlo, Monaco, Consolas, monospace" font-size="20" font-weight="800" fill="#F4EBE0">BASE SEPOLIA TESTNET</text>
-
-  <text x="92" y="192" font-family="Menlo, Monaco, Consolas, monospace" font-size="68" font-weight="800" fill="#1D1B18">tap2stacks</text>
-  <text x="92" y="238" font-family="Menlo, Monaco, Consolas, monospace" font-size="24" font-weight="600" fill="#1D1B18">Tap live price cells.</text>
-  <text x="92" y="272" font-family="Menlo, Monaco, Consolas, monospace" font-size="24" font-weight="600" fill="#1D1B18">Test USDC play preview.</text>
-
-  <!-- Own mark badge: tap coin + multiplier chip -->
-  <g transform="translate(92, 312)">
-    <rect x="4" y="4" width="356" height="74" rx="14" fill="#1D1B18" />
-    <rect x="0" y="0" width="356" height="74" rx="14" fill="#E4DCF7" stroke="#1D1B18" stroke-width="3" />
-    
-    <g>
-      <circle cx="45" cy="41" r="22" fill="#1D1B18" />
-      <circle cx="42" cy="37" r="22" fill="#FFE58A" stroke="#1D1B18" stroke-width="3" />
-      <circle cx="42" cy="37" r="15" fill="none" stroke="#E2B23C" stroke-width="2" />
-      <text x="42" y="44" text-anchor="middle" font-family="Menlo, Monaco, Consolas, monospace" font-size="21" font-weight="800" fill="#1D1B18">$</text>
-    </g>
-  
-    <text x="82" y="45" font-family="Menlo, Monaco, Consolas, monospace" font-size="24" font-weight="800" fill="#1D1B18">5s GRID • 4.5x</text>
-  </g>
-
-  <rect x="98" y="424" width="310" height="68" rx="14" fill="#1D1B18" />
-  <rect x="92" y="418" width="310" height="68" rx="14" fill="#FFD84D" stroke="#1D1B18" stroke-width="4" />
-  <text x="247" y="461" text-anchor="middle" font-family="Menlo, Monaco, Consolas, monospace" font-size="24" font-weight="800" fill="#1D1B18">TAP CELL -> PLAY</text>
-
-  
-        <g>
-          
-          <rect x="602" y="148" width="114" height="104" rx="12" fill="#E4DCF7" stroke="#1D1B18" stroke-width="2.5" />
-          <text x="659" y="236" text-anchor="middle" font-family="Menlo, Monaco, Consolas, monospace" font-size="22" font-weight="800" fill="#1D1B18">1.8x</text>
-        </g>
-      
-
-        <g>
-          
-          <rect x="730" y="148" width="114" height="104" rx="12" fill="#F5E4AE" stroke="#1D1B18" stroke-width="2.5" />
-          <text x="787" y="236" text-anchor="middle" font-family="Menlo, Monaco, Consolas, monospace" font-size="22" font-weight="800" fill="#1D1B18">2.4x</text>
-        </g>
-      
-
-        <g>
-          
-          <rect x="858" y="148" width="114" height="104" rx="12" fill="#E4DCF7" stroke="#1D1B18" stroke-width="2.5" />
-          <text x="915" y="236" text-anchor="middle" font-family="Menlo, Monaco, Consolas, monospace" font-size="22" font-weight="800" fill="#1D1B18">3.9x</text>
-        </g>
-      
-
-        <g>
-          
-          <rect x="986" y="148" width="114" height="104" rx="12" fill="#F5E4AE" stroke="#1D1B18" stroke-width="2.5" />
-          <text x="1043" y="236" text-anchor="middle" font-family="Menlo, Monaco, Consolas, monospace" font-size="22" font-weight="800" fill="#1D1B18">6.2x</text>
-        </g>
-      
-
-        <g>
-          
-          <rect x="602" y="266" width="114" height="104" rx="12" fill="#F5E4AE" stroke="#1D1B18" stroke-width="2.5" />
-          <text x="659" y="354" text-anchor="middle" font-family="Menlo, Monaco, Consolas, monospace" font-size="22" font-weight="800" fill="#1D1B18">1.4x</text>
-        </g>
-      
-
-        <g>
-          
-          <rect x="730" y="266" width="114" height="104" rx="12" fill="#E4DCF7" stroke="#1D1B18" stroke-width="2.5" />
-          <text x="787" y="354" text-anchor="middle" font-family="Menlo, Monaco, Consolas, monospace" font-size="22" font-weight="800" fill="#1D1B18">2.1x</text>
-        </g>
-      
-
-        <g>
-          <rect x="862" y="270" width="114" height="104" rx="12" fill="#1D1B18" />
-          <rect x="858" y="266" width="114" height="104" rx="12" fill="#FFD84D" stroke="#1D1B18" stroke-width="4" />
-          <text x="915" y="354" text-anchor="middle" font-family="Menlo, Monaco, Consolas, monospace" font-size="22" font-weight="800" fill="#1D1B18">4.5x</text>
-        </g>
-      
-
-        <g>
-          
-          <rect x="986" y="266" width="114" height="104" rx="12" fill="#E4DCF7" stroke="#1D1B18" stroke-width="2.5" />
-          <text x="1043" y="354" text-anchor="middle" font-family="Menlo, Monaco, Consolas, monospace" font-size="22" font-weight="800" fill="#1D1B18">8.0x</text>
-        </g>
-      
-
-        <g>
-          
-          <rect x="602" y="384" width="114" height="104" rx="12" fill="#E4DCF7" stroke="#1D1B18" stroke-width="2.5" />
-          <text x="659" y="472" text-anchor="middle" font-family="Menlo, Monaco, Consolas, monospace" font-size="22" font-weight="800" fill="#1D1B18">1.6x</text>
-        </g>
-      
-
-        <g>
-          
-          <rect x="730" y="384" width="114" height="104" rx="12" fill="#F5E4AE" stroke="#1D1B18" stroke-width="2.5" />
-          <text x="787" y="472" text-anchor="middle" font-family="Menlo, Monaco, Consolas, monospace" font-size="22" font-weight="800" fill="#1D1B18">3.1x</text>
-        </g>
-      
-
-        <g>
-          
-          <rect x="858" y="384" width="114" height="104" rx="12" fill="#E4DCF7" stroke="#1D1B18" stroke-width="2.5" />
-          <text x="915" y="472" text-anchor="middle" font-family="Menlo, Monaco, Consolas, monospace" font-size="22" font-weight="800" fill="#1D1B18">5.4x</text>
-        </g>
-      
-
-        <g>
-          
-          <rect x="986" y="384" width="114" height="104" rx="12" fill="#F5E4AE" stroke="#1D1B18" stroke-width="2.5" />
-          <text x="1043" y="472" text-anchor="middle" font-family="Menlo, Monaco, Consolas, monospace" font-size="22" font-weight="800" fill="#1D1B18">9.5x</text>
-        </g>
-      
-
-  <!-- Price line stays in upper half of every visited cell so no label is crossed -->
-  <polyline points="608,428 700,408 787,304 915,304 1002,202 1092,172"
-    fill="none" stroke="#1D1B18" stroke-width="7" stroke-linecap="round" stroke-linejoin="round" />
-  
-    <g>
-      <circle cx="918" cy="308" r="17" fill="#1D1B18" />
-      <circle cx="915" cy="304" r="17" fill="#FFE58A" stroke="#1D1B18" stroke-width="3" />
-      <circle cx="915" cy="304" r="12" fill="none" stroke="#E2B23C" stroke-width="2" />
-      <text x="915" y="310" text-anchor="middle" font-family="Menlo, Monaco, Consolas, monospace" font-size="16" font-weight="800" fill="#1D1B18">$</text>
-    </g>
-  
-  <circle cx="1002" cy="202" r="10" fill="#2F6B34" stroke="#1D1B18" stroke-width="4" />
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" width="1200" height="630">
+  <title>tap2stacks link card</title>
+  <defs><symbol id="coin" viewBox="0 0 220 110"><path d="M10 38 v30 a100 32 0 0 0 200 0 v-30" fill="#E2B23C" stroke="#1D1B18" stroke-width="10" stroke-linejoin="round"/><ellipse cx="110" cy="38" rx="100" ry="32" fill="#FFE58A" stroke="#1D1B18" stroke-width="10"/><ellipse cx="110" cy="38" rx="66" ry="19" fill="none" stroke="#E2B23C" stroke-width="7"/></symbol></defs>
+  <rect width="1200" height="630" fill="#ECE3D8"/>
+  <rect x="52" y="52" width="1110" height="540" rx="30" fill="#1D1B18"/>
+  <rect x="40" y="40" width="1110" height="540" rx="30" fill="#F4EBE0" stroke="#1D1B18" stroke-width="6"/>
+  <rect x="96" y="92" width="470" height="48" rx="10" fill="#1D1B18"/>
+  <text x="331" y="125" text-anchor="middle" font-family="JetBrains Mono, monospace" font-weight="700" font-size="22" fill="#F4EBE0">PLAY MONEY · BASE SEPOLIA</text>
+  <text x="90" y="252" font-family="JetBrains Mono, monospace" font-weight="800" font-size="108" letter-spacing="-4" fill="#1D1B18">tap2stacks</text>
+  <text x="96" y="316" font-family="JetBrains Mono, monospace" font-weight="600" font-size="30" fill="#1D1B18">Tap the live price. Stack the wins.</text>
+  <rect x="104" y="372" width="480" height="62" rx="14" fill="#1D1B18"/>
+  <rect x="96" y="364" width="480" height="62" rx="14" fill="#E4DCF7" stroke="#1D1B18" stroke-width="5"/>
+  <text x="336" y="405" text-anchor="middle" font-family="JetBrains Mono, monospace" font-weight="700" font-size="27" fill="#1D1B18">Next Opening Bell · 9:30 ET</text>
+  <text x="96" y="530" font-family="JetBrains Mono, monospace" font-weight="500" font-size="20" fill="#1D1B18" opacity="0.75">Testnet · play money · 18+ · not available in the US</text>
+  <g transform="translate(690,96) scale(1.12)"><polyline points="58,300 112,262 150,274 200,206 250,170 296,152 340,114" fill="none" stroke="#1D1B18" stroke-width="14" stroke-linecap="round" stroke-linejoin="round"/>
+  <rect x="126" y="126" width="176" height="176" rx="30" fill="#1D1B18"/>
+  <rect x="112" y="112" width="176" height="176" rx="30" fill="#FFD84D" stroke="#1D1B18" stroke-width="13"/>
+  <use href="#coin" x="142" y="200" width="120" height="60"/>
+  <use href="#coin" x="136" y="171" width="120" height="60"/>
+  <use href="#coin" x="144" y="142" width="120" height="60"/>
+  <circle cx="340" cy="114" r="15" fill="#2F6B34" stroke="#1D1B18" stroke-width="8"/></g>
 </svg>

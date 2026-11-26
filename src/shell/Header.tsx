@@ -74,6 +74,7 @@ export const Header: React.FC<HeaderProps> = ({ bellSlot }) => {
     >
       <div className="flex items-center gap-4">
         <Link to="/" className="flex shrink-0 items-center gap-2.5">
+          <img src="/brand/logo-mark.svg" alt="" width={30} height={30} className="shrink-0" style={{ width: 30, height: 30 }} />
           <span className="text-lg font-extrabold tracking-tight">
             tap2stacks
           </span>

@@ -5,6 +5,7 @@ import { THEME } from "../ui/theme";
 import { isDevMode } from "../config/dev";
 import { COINBASE_WALLET_RDNS, isCoinbaseWalletBrowser } from "./coinbaseBrowser";
 import { visibleWalletConnectors } from "./connectors";
+import { WalletIcon } from "./WalletIcon";
 
 interface WalletDialogProps {
   open: boolean;
@@ -88,7 +89,7 @@ export function WalletDialog({ open, onClose, address, network, chainId, onDisco
             <button type="button" disabled={busy} onClick={() => { setEmailMode(false); setFlowId(""); setError(""); }} className="text-xs underline">Back to wallets</button>
             {error ? <p role="alert" className="break-words text-xs" style={{ color: THEME.loss }}>{error}</p> : null}
           </form> : <div className="space-y-2">
-            {projectId && emailConnector ? <button type="button" disabled={busy} onClick={() => void openEmail()} className="w-full cursor-pointer rounded-lg p-3 text-left text-sm font-bold disabled:opacity-50" style={{ border: `1.5px solid ${THEME.ink}`, background: THEME.paper }}>Continue with email</button> : null}
+            {projectId && emailConnector ? <button type="button" disabled={busy} onClick={() => void openEmail()} className="flex w-full cursor-pointer items-center gap-3 rounded-lg p-3 text-left text-sm font-bold disabled:opacity-50" style={{ border: `1.5px solid ${THEME.ink}`, background: THEME.paper }}><WalletIcon connector={{ id: "cdpEmail" }} /><span>Continue with email</span></button> : null}
             {wallets.map((connector) => {
               const isPreferredInApp =
                 inCoinbaseBrowser &&
@@ -97,10 +98,13 @@ export function WalletDialog({ open, onClose, address, network, chainId, onDisco
                 <button key={connector.uid} type="button" disabled={isPending} onClick={() => {
                   setError("");
                   void connectAsync({ connector }).then(close).catch((err: unknown) => setError(err instanceof Error ? err.message : "Could not connect wallet"));
-                }} className="w-full cursor-pointer rounded-lg p-3 text-left text-sm font-bold disabled:opacity-50" style={{ border: `1.5px solid ${THEME.ink}`, background: isPreferredInApp ? THEME.highlight : THEME.paper }}>
-                  {connector.id === "injected" ? (inCoinbaseBrowser ? "Coinbase Wallet" : "Browser wallet") : connector.name}
-                  {isPreferredInApp ? <span className="mt-1 block text-[10px] font-normal opacity-75">In-app browser wallet</span> : null}
-                  {connector.id === "baseAccount" ? <span className="mt-1 block text-[10px] font-normal opacity-60">Opens Coinbase to sign in</span> : null}
+                }} className="flex w-full cursor-pointer items-center gap-3 rounded-lg p-3 text-left text-sm font-bold disabled:opacity-50" style={{ border: `1.5px solid ${THEME.ink}`, background: isPreferredInApp ? THEME.highlight : THEME.paper }}>
+                  <WalletIcon connector={connector as { id: string; icon?: string }} />
+                  <span className="min-w-0">
+                    {connector.id === "injected" ? (inCoinbaseBrowser ? "Coinbase Wallet" : "Browser wallet") : connector.name}
+                    {isPreferredInApp ? <span className="mt-1 block text-[10px] font-normal opacity-75">In-app browser wallet</span> : null}
+                    {connector.id === "baseAccount" ? <span className="mt-1 block text-[10px] font-normal opacity-60">Opens Coinbase to sign in</span> : null}
+                  </span>
                 </button>
               );
             })}

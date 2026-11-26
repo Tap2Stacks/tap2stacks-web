@@ -29,6 +29,19 @@ afterEach(() => {
 });
 
 describe("wallet dialog", () => {
+  it("shows a logo on every wallet option without changing its name", () => {
+    const icon = "data:image/svg+xml;base64,PHN2Zy8+";
+    mockConnectors = [
+      { uid: "base", id: "baseAccount", name: "Base Account" },
+      { uid: "mm", id: "io.metamask", type: "injected", name: "MetaMask", icon } as (typeof mockConnectors)[number],
+    ];
+    render(<WalletDialog open onClose={vi.fn()} onDisconnect={vi.fn()} />);
+    const base = screen.getByRole("button", { name: /Base Account/ });
+    expect(base.querySelector('img[src="/brand/wallets/base-square.svg"]')).toBeTruthy();
+    const mm = screen.getByRole("button", { name: "MetaMask" });
+    expect(mm.querySelector(`img[src="${icon}"]`)).toBeTruthy();
+  });
+
   it("lists wallets and connects the chosen browser wallet", async () => {
     const close = vi.fn();
     render(<WalletDialog open onClose={close} onDisconnect={vi.fn()} />);

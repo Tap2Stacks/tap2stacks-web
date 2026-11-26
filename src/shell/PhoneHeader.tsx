@@ -35,8 +35,9 @@ export const PhoneHeader: React.FC<{ bellSlot?: React.ReactNode }> = ({ bellSlot
       }}
     >
       <div className="flex items-center justify-between gap-1">
-        <Link to="/trade" className="shrink-0 text-sm font-extrabold tracking-tight">
-          tap2stacks
+        <Link to="/trade" className="flex shrink-0 items-center gap-1.5 text-sm font-extrabold tracking-tight">
+          <img src="/brand/logo-mark.svg" alt="" width={22} height={22} className="shrink-0" style={{ width: 22, height: 22 }} />
+          <span>tap2stacks</span>
         </Link>
         <div className="flex min-w-0 items-center gap-1">
           <div className="shrink-0">{bellSlot ?? <BellPill compact />}</div>

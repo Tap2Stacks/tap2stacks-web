@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <title>tap2stacks</title>
+  <rect x="11" y="11" width="46" height="46" rx="9" fill="#1D1B18"/>
+  <rect x="6" y="6" width="46" height="46" rx="9" fill="#FFD84D" stroke="#1D1B18" stroke-width="4"/>
+  <path d="M14 34 v6 a15 5.5 0 0 0 30 0 v-6" fill="#E2B23C" stroke="#1D1B18" stroke-width="3" stroke-linejoin="round"/>
+  <ellipse cx="29" cy="34" rx="15" ry="5.5" fill="#FFE58A" stroke="#1D1B18" stroke-width="3"/>
+  <path d="M14 24 v6 a15 5.5 0 0 0 30 0 v-6" fill="#E2B23C" stroke="#1D1B18" stroke-width="3" stroke-linejoin="round"/>
+  <ellipse cx="29" cy="24" rx="15" ry="5.5" fill="#FFE58A" stroke="#1D1B18" stroke-width="3"/>
+</svg>

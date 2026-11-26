@@ -21,7 +21,7 @@ export function ComplianceGate() {
           fontFamily: THEME.font,
         }}
       >
-        <p className="mb-3 text-xs font-bold uppercase tracking-widest">tap2stacks</p>
+        <p className="mb-3 flex items-center gap-2 text-xs font-bold uppercase tracking-widest"><img src="/brand/logo-mark.svg" alt="" width={24} height={24} className="shrink-0" style={{ width: 24, height: 24 }} /><span>tap2stacks</span></p>
         <h1 id="compliance-title" className="text-2xl font-bold">
           Before you play
         </h1>

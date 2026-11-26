@@ -155,6 +155,7 @@ describe("phone shell", () => {
     expect(
       screen.queryByRole("navigation", { name: "Mobile navigation" }),
     ).toBeNull();
+    expect(document.querySelector('header img[src="/brand/logo-mark.svg"]')).toBeTruthy();
   });
 
   it("resizing 1440 -> 390 -> 1440 mounts useRealtime only once", () => {
@@ -216,6 +217,8 @@ describe("phone shell", () => {
 
     expect(screen.getByText("Bell 2h 14m")).toBeTruthy();
     expect(screen.getByRole("button", { name: "Connect" })).toBeTruthy();
+    expect(document.querySelector('img[src="/brand/logo-mark.svg"]')).toBeTruthy();
+    expect(screen.getByRole("link", { name: "tap2stacks" })).toBeTruthy();
   });
 
   it("PhoneHeader account menu shows DEV 'Add 100 test credits' and posts debug deposit", async () => {

@@ -1,13 +1,15 @@
 import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
+import { homedir } from "node:os";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const OUT_DIR = resolve(ROOT, "public/brand");
-const GSTACK_PLAYWRIGHT = "/Users/dev/.tools/node_modules/playwright";
-const DEFAULT_BROWSERS_PATH = "/Users/dev/.local/share/ms-playwright";
+// Optional: a Playwright install outside this repo (PLAYWRIGHT_MODULE=/path/to/node_modules/playwright).
+const EXTRA_PLAYWRIGHT = process.env.PLAYWRIGHT_MODULE;
+const DEFAULT_BROWSERS_PATH = resolve(homedir(), ".local/share/ms-playwright");
 
 const PALETTE = {
   paper: "#F4EBE0",
@@ -144,7 +146,7 @@ function buildOgSvg() {
 
 function loadPlaywright() {
   const require = createRequire(import.meta.url);
-  for (const candidate of ["playwright", GSTACK_PLAYWRIGHT]) {
+  for (const candidate of ["playwright", EXTRA_PLAYWRIGHT].filter(Boolean)) {
     try {
       return require(candidate);
     } catch {

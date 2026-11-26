@@ -1,4 +1,4 @@
-name: Commit identity and naming
+name: Commit identity
 on: [push]
 jobs:
   check:
@@ -7,5 +7,5 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: Check identities and retired names
+      - name: Check commit identities
         run: python3 .githooks/check.py ci

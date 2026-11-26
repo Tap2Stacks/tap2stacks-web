@@ -36,7 +36,7 @@ export default defineConfig(({ mode }) => {
     test: {
       environment: "jsdom",
       // Builder worktrees live inside this folder; their tests belong to their own runs.
-      exclude: [...configDefaults.exclude, ".agent-worktrees/**"],
+      exclude: [...configDefaults.exclude, ".*-worktrees/**"],
     },
   };
 });

@@ -17,7 +17,7 @@ This guide contains every field and asset required to register **tap2stacks** on
 | **Network** | `Base Sepolia` (`84532`) | Testnet preview deployment |
 | **Base Builder Code** | `bc_ymo2v08a` | Configured via `VITE_BASE_BUILDER_CODE=bc_ymo2v08a` |
 | **ERC-8021 Data Suffix** | `0x62635f796d6f32763038610b0080218021802180218021802180218021` | Generated automatically by `builderCodeSuffix("bc_ymo2v08a")` |
-| **Support / Contact** | `<REPLACE_WITH_SUPPORT_EMAIL_OR_URL>` | **Placeholder for the owner:** fill in her support email or contact URL before submitting |
+| **Support / Contact** | `<REPLACE_WITH_SUPPORT_EMAIL_OR_URL>` | **Placeholder:** fill in the support email or contact URL before submitting |
 
 ## 2. Visual Assets
 
@@ -36,7 +36,7 @@ Brand icon and OpenGraph banner are generated deterministically from SVGs (warm 
 To regenerate `public/brand/icon.png` and `public/brand/og.png` using Playwright's headless shell:
 
 ```bash
-PLAYWRIGHT_BROWSERS_PATH=/Users/dev/.local/share/ms-playwright node scripts/generate-miniapp-images.mjs
+PLAYWRIGHT_BROWSERS_PATH=$HOME/.local/share/ms-playwright node scripts/generate-miniapp-images.mjs
 ```
 
 ## 3. Build Environment Variables
@@ -50,7 +50,7 @@ VITE_CHAIN_ID=84532
 VITE_RPC_URL=https://sepolia.base.org
 ```
 
-## 4. Exact Steps for the owner to Register & Verify
+## 4. Exact Steps to Register & Verify
 
 1. **Deploy the web app** at `https://45-77-250-147.sslip.io` (built with `VITE_PUBLIC_URL=https://45-77-250-147.sslip.io` and `VITE_BASE_BUILDER_CODE=bc_ymo2v08a`). Confirm `https://45-77-250-147.sslip.io/brand/icon.png` and `https://45-77-250-147.sslip.io/brand/og.png` return HTTP 200 and `<meta property="og:image">` in `index.html` points to `https://45-77-250-147.sslip.io/brand/og.png`.
 2. **Open the Base Dashboard** at [base.dev](https://www.base.dev) and sign in with the project owner wallet that holds/manages Builder Code `bc_ymo2v08a`.
@@ -59,7 +59,7 @@ VITE_RPC_URL=https://sepolia.base.org
    - Icon: `public/brand/icon.png` (`1024x1024`, opaque PNG)
    - Banner (if requested): `public/brand/og.png` (`1200x630`)
    - Screenshots: `docs/listing/screenshots/1-board.png`, `2-wallet.png`, `3-history.png` (`1284x2778`)
-   - Support / Contact: replace `<REPLACE_WITH_SUPPORT_EMAIL_OR_URL>` with the owner's support email or contact URL
+   - Support / Contact: replace `<REPLACE_WITH_SUPPORT_EMAIL_OR_URL>` with the support email or contact URL
 5. **Verify domain & ownership** if prompted by the Base Dashboard (follow the dashboard's domain ownership check or wallet signature prompt for `45-77-250-147.sslip.io`).
 6. **Smoke test inside Coinbase Wallet mobile browser (iPhone 12+ / Android):**
    - Open `https://45-77-250-147.sslip.io` inside Coinbase Wallet's in-app browser.

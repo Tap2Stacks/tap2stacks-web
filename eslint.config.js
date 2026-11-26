@@ -8,7 +8,7 @@ import { defineConfig, globalIgnores } from 'eslint/config'
 export default defineConfig([
   globalIgnores([
     'dist',
-    '.agent-worktrees',
+    '.*-worktrees',
     'src/services/queries.ts',
     'src/services/models/**',
     'src/workflow-diagrams/**',

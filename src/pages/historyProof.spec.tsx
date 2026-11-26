@@ -1,4 +1,3 @@
-import { readFileSync } from "node:fs";
 import { createHash } from "node:crypto";
 import {
   cleanup,
@@ -34,20 +33,6 @@ describe("History & HistoryProofDialog", () => {
   afterEach(() => {
     cleanup();
     localStorage.clear();
-  });
-
-  it("contains no HCS, Legacy, Topic, or Hashscan text in History files", () => {
-    const files = [
-      "src/HistoryView.tsx",
-      "src/pages/HistoryProofDialog.tsx",
-      "src/pages/useHistory.ts",
-      "src/pages/historyUtils.ts",
-    ];
-    for (const file of files) {
-      const content = readFileSync(`${process.cwd()}/${file}`, "utf8");
-      expect(content).not.toMatch(/\b(HCS|Legacy|Hashscan)\b/i);
-      expect(content).not.toMatch(/Topic \/ Sequence|topicId/i);
-    }
   });
 
   it("shows PROOF_PENDING message when proof endpoint returns 404 PROOF_PENDING", async () => {

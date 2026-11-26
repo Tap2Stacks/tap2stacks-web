@@ -15,7 +15,8 @@ const RUBBER_BAND_COEFF = 0.55;
 const RUBBER_BAND_FRACTION = 0.25;
 const MOMENTUM_TAU_MS = 325;
 const SPRING_TAU_MS = 105;
-const SNAP_DURATION_MS = 240;
+export const SNAP_DURATION_MS = 240;
+export const AUTO_RETURN_MS = 3_000;
 const STOP_SPEED_PX_PER_MS = 0.015;
 const MAX_FLING_PX_PER_MS = 4.0;
 const ZOOM_EPS = 0.015;
@@ -178,6 +179,7 @@ interface SnapAnimation {
   fromTimeOffsetMs: number;
   fromPriceOffset: number;
   fromZoom: number;
+  toZoom: number;
 }
 
 export class BoardCamera {
@@ -192,6 +194,7 @@ export class BoardCamera {
   private vyPxPerMs = 0;
   private dragging = false;
   private snapAnim: SnapAnimation | null = null;
+  private idleSincePerf: number | null = null;
 
   get isFollowing(): boolean {
     return this.following;
@@ -212,10 +215,12 @@ export class BoardCamera {
     this.vyPxPerMs = 0;
     this.dragging = false;
     this.snapAnim = null;
+    this.idleSincePerf = null;
   }
 
   beginDrag(nowMs: number, liveCenterPrice: number): void {
     this.snapAnim = null;
+    this.idleSincePerf = null;
     this.vxPxPerMs = 0;
     this.vyPxPerMs = 0;
     if (this.following || this.rawViewNowMs === null || this.rawCenterPrice === null) {
@@ -239,6 +244,7 @@ export class BoardCamera {
     }
     this.following = false;
     this.snapAnim = null;
+    this.idleSincePerf = null;
 
     const { baseMsPerPx, basePricePerPx, minZoom } = baseScaleFor(metrics);
     const z = clampZoom(this.zoom, minZoom);
@@ -323,6 +329,7 @@ export class BoardCamera {
     }
     this.following = false;
     this.snapAnim = null;
+    this.idleSincePerf = null;
     this.vxPxPerMs = 0;
     this.vyPxPerMs = 0;
 
@@ -357,27 +364,31 @@ export class BoardCamera {
     const safeF = Number.isFinite(factor) && factor > 0 ? factor : 1;
     if (safeF === 1) return;
 
-    this.snapAnim = null;
     const { baseMsPerPx, basePricePerPx, minZoom } = baseScaleFor(metrics);
     const prevZ = clampZoom(this.zoom, minZoom);
     const nextZ = clampZoom(prevZ * safeF, minZoom);
+    this.zoom = nextZ;
+
+    // While following, keep NOW and liveCenterPrice anchored.
+    if (this.following) {
+      if (this.snapAnim) {
+        this.snapAnim.fromZoom = nextZ;
+        this.snapAnim.toZoom = nextZ;
+      }
+      return;
+    }
+
+    this.snapAnim = null;
+    this.idleSincePerf = null;
+    if (this.rawViewNowMs === null || this.rawCenterPrice === null) {
+      this.rawViewNowMs = nowMs;
+      this.rawCenterPrice = liveCenterPrice;
+    }
 
     const prevMsPerPx = baseMsPerPx / prevZ;
     const nextMsPerPx = baseMsPerPx / nextZ;
     const prevPricePerPx = basePricePerPx / prevZ;
     const nextPricePerPx = basePricePerPx / nextZ;
-
-    this.zoom = nextZ;
-
-    // Zooming pauses tracking: start from the live view, then hold still where the player zoomed.
-    // The return-to-default button (snapToLive) resumes tracking at the default box size.
-    if (this.following || this.rawViewNowMs === null || this.rawCenterPrice === null) {
-      this.rawViewNowMs = nowMs;
-      this.rawCenterPrice = liveCenterPrice;
-      this.following = false;
-      this.vxPxPerMs = 0;
-      this.vyPxPerMs = 0;
-    }
 
     // Keep the world (ts, price) directly under (anchorX, anchorY) stationary
     const plotW = effectivePlotWidth(metrics);
@@ -402,19 +413,22 @@ export class BoardCamera {
     this.rawCenterPrice = clamp(nextCenterPrice, pBounds.minPrice, pBounds.maxPrice);
   }
 
-  snapToLive(
+  returnToLive(
     perfMs: number,
     nowMs: number,
     liveCenterPrice: number,
     reducedMotion: boolean,
+    keepZoom: boolean,
   ): void {
     this.vxPxPerMs = 0;
     this.vyPxPerMs = 0;
     this.dragging = false;
+    this.idleSincePerf = null;
 
     const fromTimeOffsetMs = this.following || this.rawViewNowMs === null ? 0 : this.rawViewNowMs - nowMs;
     const fromPriceOffset = this.following || this.rawCenterPrice === null ? 0 : this.rawCenterPrice - liveCenterPrice;
     const fromZoom = this.zoom;
+    const toZoom = keepZoom ? this.zoom : 1;
 
     this.following = true;
     this.rawViewNowMs = null;
@@ -424,9 +438,9 @@ export class BoardCamera {
       reducedMotion ||
       (Math.abs(fromTimeOffsetMs) < 1 &&
         Math.abs(fromPriceOffset) < 1e-6 &&
-        Math.abs(fromZoom - 1) < 1e-4)
+        Math.abs(fromZoom - toZoom) < 1e-4)
     ) {
-      this.zoom = 1;
+      this.zoom = toZoom;
       this.snapAnim = null;
       return;
     }
@@ -436,7 +450,17 @@ export class BoardCamera {
       fromTimeOffsetMs,
       fromPriceOffset,
       fromZoom,
+      toZoom,
     };
+  }
+
+  snapToLive(
+    perfMs: number,
+    nowMs: number,
+    liveCenterPrice: number,
+    reducedMotion: boolean,
+  ): void {
+    this.returnToLive(perfMs, nowMs, liveCenterPrice, reducedMotion, false);
   }
 
   step(
@@ -463,7 +487,7 @@ export class BoardCamera {
       const ease = 1 - Math.pow(1 - progress, 3);
       const inv = 1 - ease;
 
-      this.zoom = 1 + (this.snapAnim.fromZoom - 1) * inv;
+      this.zoom = this.snapAnim.toZoom + (this.snapAnim.fromZoom - this.snapAnim.toZoom) * inv;
 
       const z = clampZoom(this.zoom, minZoom);
       const msPerPx = baseMsPerPx / z;
@@ -473,7 +497,7 @@ export class BoardCamera {
       const centerPrice = liveCenterPrice + this.snapAnim.fromPriceOffset * inv;
 
       if (progress >= 1) {
-        this.zoom = 1;
+        this.zoom = this.snapAnim.toZoom;
         this.snapAnim = null;
       } else {
         moving = true;
@@ -539,6 +563,7 @@ export class BoardCamera {
     let centerPrice = this.rawCenterPrice ?? liveCenterPrice;
 
     if (this.dragging) {
+      this.idleSincePerf = null;
       const timeLimit = plotW * RUBBER_BAND_FRACTION * msPerPx;
       const priceLimit = plotH * RUBBER_BAND_FRACTION * pricePerPx;
       const resistedOffset = applyEdgeResistance(
@@ -647,6 +672,15 @@ export class BoardCamera {
 
     this.rawViewNowMs = viewNowMs;
     this.rawCenterPrice = centerPrice;
+
+    if (moving) {
+      this.idleSincePerf = null;
+    } else if (this.idleSincePerf === null) {
+      this.idleSincePerf = perfMs;
+    } else if (perfMs - this.idleSincePerf >= AUTO_RETURN_MS) {
+      this.returnToLive(perfMs, nowMs, liveCenterPrice, reducedMotion, true);
+      return this.step(perfMs, 0, nowMs, liveCenterPrice, metrics, reducedMotion);
+    }
 
     return {
       viewport: {

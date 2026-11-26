@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   applyEdgeResistance,
+  AUTO_RETURN_MS,
   baseScaleFor,
   BoardCamera,
   clampZoom,
@@ -12,6 +13,7 @@ import {
   minCellPx,
   priceBounds,
   rubberBand,
+  SNAP_DURATION_MS,
   timeOffsetBounds,
   type CameraMetrics,
 } from "./camera";
@@ -251,19 +253,25 @@ describe("camera zoom, pan transforms and clamps", () => {
     expect(state.moving).toBe(false);
   });
 
-  it("anchors cursor world coordinate when zooming, and pauses tracking when zooming from live view", () => {
+  it("keeps following the live price while zooming from live view", () => {
     const cam = new BoardCamera();
     const initial = cam.step(0, 16, 400_000, 155, desktopMetrics, false);
 
-    // Zooming from live view pauses tracking
-    cam.zoomAt(0.5, 600, 200, desktopMetrics, 400_000, 155);
-    const zoomedLive = cam.step(16, 16, 400_000, 155, desktopMetrics, false);
-    expect(zoomedLive.isLive).toBe(false);
-    expect(zoomedLive.isZoomed).toBe(true);
-    expect(zoomedLive.viewport.msPerPx).toBeCloseTo(initial.viewport.msPerPx * 2, 4);
-    expect(zoomedLive.viewport.pricePerPx).toBeCloseTo(initial.viewport.pricePerPx * 2, 4);
+    cam.zoomAt(0.7, 600, 200, desktopMetrics, 400_000, 155);
+    expect(cam.isFollowing).toBe(true);
+    expect(cam.isZoomed).toBe(true);
+    const zoomed = cam.step(16, 16, 401_000, 155.4, desktopMetrics, false);
+    expect(zoomed.isLive).toBe(true);
+    expect(zoomed.isZoomed).toBe(true);
+    expect(zoomed.viewport.viewNowMs).toBe(401_000);
+    expect(zoomed.viewport.centerPrice).toBe(155.4);
+    expect(boxSide(zoomed.viewport)).toBeCloseTo(boxSide(initial.viewport) * 0.7, 4);
+  });
 
-    // Pan away, then zoom at cursor (650, 180) -> world (ts, price) under cursor stays fixed
+  it("anchors cursor world coordinate when zooming while panned away", () => {
+    const cam = new BoardCamera();
+    cam.step(0, 16, 400_000, 155, desktopMetrics, false);
+
     cam.beginDrag(400_000, 155);
     cam.dragBy(120, 40, desktopMetrics, 400_000, 155);
     cam.endDrag(0, 0, desktopMetrics, 400_000, 155, true);
@@ -275,6 +283,126 @@ describe("camera zoom, pan transforms and clamps", () => {
     const after = cam.step(48, 16, 400_000, 155, desktopMetrics, true);
     expect(xToTime(after.viewport, 650)).toBeCloseTo(tsUnderCursor, 1);
     expect(yToPrice(after.viewport, 180)).toBeCloseTo(priceUnderCursor, 5);
+  });
+
+  it("returns to the live price 3 s after a drag, keeping the zoom", () => {
+    const cam = new BoardCamera();
+    cam.step(0, 16, 400_000, 155, desktopMetrics, false);
+    cam.zoomAt(0.7, 600, 300, desktopMetrics, 400_000, 155);
+    cam.beginDrag(400_000, 155);
+    cam.dragBy(200, 0, desktopMetrics, 400_000, 155);
+    cam.endDrag(0, 0, desktopMetrics, 400_000, 155, false);
+
+    // First idle frame marks idle start at perf = 100
+    const idleStart = cam.step(100, 16, 400_100, 155, desktopMetrics, false);
+    expect(idleStart.isLive).toBe(false);
+
+    const beforeDeadline = cam.step(100 + AUTO_RETURN_MS - 1, 16, 403_099, 155, desktopMetrics, false);
+    expect(beforeDeadline.isLive).toBe(false);
+
+    const returning = cam.step(100 + AUTO_RETURN_MS, 1, 403_100, 155.2, desktopMetrics, false);
+    expect(returning.isLive).toBe(true);
+    expect(returning.moving).toBe(true);
+
+    const settled = cam.step(100 + AUTO_RETURN_MS + SNAP_DURATION_MS, 16, 403_340, 155.2, desktopMetrics, false);
+    expect(settled.isLive).toBe(true);
+    expect(cam.isFollowing).toBe(true);
+    expect(settled.moving).toBe(false);
+    expect(settled.isZoomed).toBe(true);
+    expect(boxSide(settled.viewport)).toBeCloseTo(0.7 * desktopMetrics.cellPx, 4);
+  });
+
+  it("starts the 3 s only after momentum stops", () => {
+    const cam = new BoardCamera();
+    cam.step(0, 16, 400_000, 155, desktopMetrics, false);
+    cam.beginDrag(400_000, 155);
+    cam.dragBy(100, 0, desktopMetrics, 400_000, 155);
+    cam.endDrag(1.5, 0, desktopMetrics, 400_000, 155, false);
+
+    let t = 16;
+    let settledPerf: number | null = null;
+    while (t < 10_000) {
+      const state = cam.step(t, 16, 400_000 + t, 155, desktopMetrics, false);
+      if (!state.moving && settledPerf === null) {
+        settledPerf = t;
+        break;
+      }
+      t += 16;
+    }
+    expect(settledPerf).not.toBeNull();
+    // 3000 ms after release (while momentum was still running or just stopped) -> not live yet
+    expect(cam.step(3_000, 16, 403_000, 155, desktopMetrics, false).isLive).toBe(false);
+
+    const returning = cam.step(settledPerf! + AUTO_RETURN_MS, 16, 400_000 + settledPerf! + AUTO_RETURN_MS, 155, desktopMetrics, false);
+    expect(returning.isLive).toBe(true);
+    const done = cam.step(
+      settledPerf! + AUTO_RETURN_MS + SNAP_DURATION_MS,
+      16,
+      400_000 + settledPerf! + AUTO_RETURN_MS + SNAP_DURATION_MS,
+      155,
+      desktopMetrics,
+      false,
+    );
+    expect(done.isLive).toBe(true);
+    expect(done.moving).toBe(false);
+  });
+
+  it("a new drag or zoom restarts the 3 s", () => {
+    const cam = new BoardCamera();
+    cam.step(0, 16, 400_000, 155, desktopMetrics, false);
+    cam.beginDrag(400_000, 155);
+    cam.dragBy(100, 0, desktopMetrics, 400_000, 155);
+    cam.endDrag(0, 0, desktopMetrics, 400_000, 155, false);
+
+    // Idle starts at perf = 0
+    expect(cam.step(0, 16, 400_000, 155, desktopMetrics, false).isLive).toBe(false);
+    expect(cam.step(2500, 16, 402_500, 155, desktopMetrics, false).isLive).toBe(false);
+
+    // New drag resets the timer
+    cam.beginDrag(402_500, 155);
+    cam.dragBy(10, 0, desktopMetrics, 402_500, 155);
+    cam.endDrag(0, 0, desktopMetrics, 402_500, 155, false);
+
+    // Settle timer at perf = 2500 -> +2500 = 5000 is not live; +3000 = 5500 is returning
+    expect(cam.step(2500, 16, 402_500, 155, desktopMetrics, false).isLive).toBe(false);
+    expect(cam.step(5000, 16, 405_000, 155, desktopMetrics, false).isLive).toBe(false);
+    expect(cam.step(5500, 16, 405_500, 155, desktopMetrics, false).isLive).toBe(true);
+
+    // Also test zoom while panned away restarts the 3 s timer and keeps the new zoom
+    const cam2 = new BoardCamera();
+    cam2.step(0, 16, 400_000, 155, desktopMetrics, false);
+    cam2.beginDrag(400_000, 155);
+    cam2.dragBy(100, 0, desktopMetrics, 400_000, 155);
+    cam2.endDrag(0, 0, desktopMetrics, 400_000, 155, false);
+    expect(cam2.step(0, 16, 400_000, 155, desktopMetrics, false).isLive).toBe(false);
+    expect(cam2.step(2500, 16, 402_500, 155, desktopMetrics, false).isLive).toBe(false);
+    cam2.zoomAt(0.8, 500, 300, desktopMetrics, 402_500, 155);
+    expect(cam2.step(2500, 16, 402_500, 155, desktopMetrics, false).isLive).toBe(false);
+    expect(cam2.step(5499, 16, 405_499, 155, desktopMetrics, false).isLive).toBe(false);
+    const returning2 = cam2.step(5500, 1, 405_500, 155, desktopMetrics, false);
+    expect(returning2.isLive).toBe(true);
+    const done2 = cam2.step(5500 + SNAP_DURATION_MS, 16, 405_500 + SNAP_DURATION_MS, 155, desktopMetrics, false);
+    expect(boxSide(done2.viewport)).toBeCloseTo(0.8 * desktopMetrics.cellPx, 4);
+  });
+
+  it("reduced motion returns at once after 3 s", () => {
+    const cam = new BoardCamera();
+    cam.step(0, 16, 400_000, 155, desktopMetrics, true);
+    cam.zoomAt(0.75, 500, 300, desktopMetrics, 400_000, 155);
+    cam.beginDrag(400_000, 155);
+    cam.dragBy(150, 20, desktopMetrics, 400_000, 155);
+    cam.endDrag(0, 0, desktopMetrics, 400_000, 155, true);
+
+    expect(cam.step(100, 16, 400_100, 155, desktopMetrics, true).isLive).toBe(false);
+    expect(cam.step(3099, 16, 403_099, 155, desktopMetrics, true).isLive).toBe(false);
+
+    const jumped = cam.step(3100, 16, 403_100, 155.3, desktopMetrics, true);
+    expect(jumped.isLive).toBe(true);
+    expect(jumped.moving).toBe(false);
+    expect(cam.isFollowing).toBe(true);
+    expect(jumped.viewport.viewNowMs).toBe(403_100);
+    expect(jumped.viewport.centerPrice).toBe(155.3);
+    expect(boxSide(jumped.viewport)).toBeCloseTo(0.75 * desktopMetrics.cellPx, 4);
   });
 
   it("snapToLive smoothly returns to auto-follow and default zoom", () => {
@@ -304,23 +432,5 @@ describe("camera zoom, pan transforms and clamps", () => {
     expect(viewport.rightGutter).toBe(50);
     expect(timeToX(viewport, 400_000)).toBeCloseTo(325 * 0.35, 4);
     expect(timeToX(viewport, 400_000 + 5_000) - timeToX(viewport, 400_000)).toBeCloseTo(60, 4);
-  });
-
-  it("pauses tracking the price when zooming from live view, keeping the point under the cursor", () => {
-    const cam = new BoardCamera();
-    const m = { ...liveDesktop, minSeriesPrice: 154.7, maxSeriesPrice: 155.3 }; // 20 quoted rows around 155
-    const before = cam.step(0, 16, 10_000, 155, m, false);
-    const ts = xToTime(before.viewport, 900);
-    const price = yToPrice(before.viewport, 100);
-    cam.zoomAt(0.7, 900, 100, m, 10_000, 155);
-    const r = cam.step(16, 16, 10_000, 155, m, true);
-    expect(cam.isFollowing).toBe(false);
-    expect(r.isLive).toBe(false);
-    expect(r.isZoomed).toBe(true);
-    expect(xToTime(r.viewport, 900)).toBeCloseTo(ts, 1);
-    expect(yToPrice(r.viewport, 100)).toBeCloseTo(price, 5);
-    // The price moves on while paused: the view does not follow it
-    const later = cam.step(32, 16, 12_000, 155.5, m, true);
-    expect(later.viewport.centerPrice).toBeCloseTo(r.viewport.centerPrice, 9);
   });
 });

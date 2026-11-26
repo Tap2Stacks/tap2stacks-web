@@ -8,8 +8,8 @@ export const WINDOW_MS = 5_000;
 export const MAX_CELL_ZOOM = 2;
 /** Zooming out never makes a box smaller than this, so multipliers stay readable. */
 export const MIN_CELL_PX = 28;
-/** Zooming out stops once about this many priced boxes are in view. */
-export const MAX_PRICED_CELLS_IN_VIEW = 200;
+/** Zooming out stops once about this many priced boxes are in view (15 columns x 20 rows). */
+export const MAX_PRICED_CELLS_IN_VIEW = 300;
 
 const RUBBER_BAND_COEFF = 0.55;
 const RUBBER_BAND_FRACTION = 0.25;

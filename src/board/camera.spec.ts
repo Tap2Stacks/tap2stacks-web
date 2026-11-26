@@ -7,6 +7,7 @@ import {
   FUTURE_LIMIT_MS,
   HISTORY_LIMIT_MS,
   MAX_CELL_ZOOM,
+  MAX_PRICED_CELLS_IN_VIEW,
   MIN_CELL_PX,
   minCellPx,
   priceBounds,
@@ -86,14 +87,14 @@ describe("camera zoom, pan transforms and clamps", () => {
     expect(boxSide(viewport)).toBeCloseTo(84 * MAX_CELL_ZOOM, 6);
   });
 
-  it("stops zooming out when every priced box fits, at about 200 boxes, and never below 28 px", () => {
+  it("stops zooming out when every priced box fits, at about 300 boxes, and never below 28 px", () => {
     expect(minCellPx(liveDesktop)).toBeCloseTo(35, 6);
     expect(minCellPx({ ...liveDesktop, quotedCols: 10 })).toBeCloseTo(35, 6);
     const wide = { ...liveDesktop, quotedCols: 24 };
     const s = minCellPx(wide);
-    expect(s).toBeCloseTo(51.5, 0);
+    expect(s).toBeCloseTo(42.0, 0); // sqrt(700 x 757.6 / 300): about 300 of the 480 boxes in view
     const inView = Math.min(20, 700 / s) * Math.min(24, (1222 * 0.62) / s);
-    expect(inView).toBeLessThanOrEqual(200.001);
+    expect(inView).toBeLessThanOrEqual(300.001);
     expect(minCellPx(smallPhone)).toBe(MIN_CELL_PX);
     expect(minCellPx({ ...liveDesktop, quotedRows: 0 })).toBe(MIN_CELL_PX);
     expect(minCellPx({ ...liveDesktop, quotedCols: 0 })).toBe(MIN_CELL_PX);
@@ -130,6 +131,15 @@ describe("camera zoom, pan transforms and clamps", () => {
     expect(b.minPrice).toBeCloseTo(154.7 + span / 2 - 0.03, 9);
     const wide = priceBounds(155, 0.03, 2, 154.9, 155.1);
     expect(wide.minPrice).toBeCloseTo(wide.maxPrice, 9);
+  });
+
+  it("zooms out far enough to show all 300 boxes of a 15-column grid", () => {
+    expect(MAX_PRICED_CELLS_IN_VIEW).toBe(300);
+    const grid15 = { ...liveDesktop, quotedCols: 15 };
+    const s = minCellPx(grid15);
+    // At 35 px all 20 rows fill the 700 px plot and the 15 columns (525 px) fit in the 757.6 px future
+    expect(s).toBeCloseTo(35, 6);
+    expect(Math.min(20, 700 / s) * Math.min(15, 757.64 / s)).toBeCloseTo(300, 6);
   });
 
   it("clamps one zoom value within its bounds", () => {

@@ -205,6 +205,24 @@ describe('drawBoard', () => {
         expect(dashIdx).toBeGreaterThan(-1);
         expect(cellLabelIdx).toBeGreaterThan(dashIdx);
     });
+
+    it('stops the dashed live-price guide at the first open column so it never crosses multipliers', () => {
+        const { ctx, calls } = recordingContext();
+        // NOW at x = 300; the open cell starts 5 s ahead at x = 300 + 5000 / 50 = 400
+        drawBoard(ctx, scene);
+        const dashIdx = calls.findIndex(c => c.name === 'setLineDash' && Array.isArray(c.args[0]) && (c.args[0] as number[])[0] === 3);
+        const guide = calls.slice(dashIdx).find(c => c.name === 'bezierCurveTo');
+        expect(guide).toBeDefined();
+        expect(Number(guide!.args[4])).toBeCloseTo(400, 0);
+    });
+
+    it('runs the dashed live-price guide to the plot edge when no open column is visible', () => {
+        const { ctx, calls } = recordingContext();
+        drawBoard(ctx, { ...scene, cells: [testCell({ timeWindowStart: 11000, timeWindowEnd: 16000 })] });
+        const dashIdx = calls.findIndex(c => c.name === 'setLineDash' && Array.isArray(c.args[0]) && (c.args[0] as number[])[0] === 3);
+        const guide = calls.slice(dashIdx).find(c => c.name === 'bezierCurveTo');
+        expect(Number(guide!.args[4])).toBeCloseTo(1000, 0);
+    });
 });
 
 it('drawStack draws a count badge x3 and the total $15', () => {

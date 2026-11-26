@@ -8,7 +8,7 @@ describe("payoutEmphasis", () => {
     const five = payoutEmphasis(5);
     const high = payoutEmphasis(25);
 
-    expect(low.textAlpha).toBeGreaterThanOrEqual(0.45);
+    expect(low.textAlpha).toBeGreaterThanOrEqual(0.7);
     expect(two.textAlpha).toBeGreaterThan(low.textAlpha);
     expect(five.textAlpha).toBeGreaterThan(two.textAlpha);
     expect(high.textAlpha).toBeGreaterThan(five.textAlpha);

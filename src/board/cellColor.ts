@@ -310,6 +310,6 @@ export function cellPalette(multiplier: number, mode: BoardThemeMode = "light"):
 export function cellTextColor(multiplier: number, mode: BoardThemeMode = "light"): string {
   const t = probabilityHeat(multiplier);
   const H = (92 - 107 * t + 360) % 360;
-  const L = mode === "dark" ? 0.82 : 0.48;
+  const L = mode === "dark" ? 0.82 : 0.44;
   return oklchToSrgb(L, 0.13, H).hex;
 }

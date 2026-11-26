@@ -364,6 +364,18 @@ function drawStacksAndBets(ctx: CanvasRenderingContext2D, scene: BoardScene, ani
     }
 }
 
+/** x where the first open (tappable) column starts, so the live guide stays in the blank zone. */
+function guideEndX(cells: CellData[], v: BoardViewport, plotRight: number): number {
+    let firstOpenTs = Infinity;
+    for (const cell of cells) {
+        if (cell.timeWindowEnd <= v.nowMs || cell.status === 'past') continue;
+        if (isLocked(cell.timeWindowStart, v.nowMs)) continue;
+        if (cell.timeWindowStart < firstOpenTs) firstOpenTs = cell.timeWindowStart;
+    }
+    if (!Number.isFinite(firstOpenTs)) return plotRight;
+    return Math.max(0, Math.min(plotRight, timeToX(v, firstOpenTs)));
+}
+
 export function drawBoard(ctx: CanvasRenderingContext2D, scene: BoardScene): void {
     const { viewport: v } = scene;
     const mode: BoardThemeMode = scene.themeMode ?? 'light';
@@ -399,6 +411,7 @@ export function drawBoard(ctx: CanvasRenderingContext2D, scene: BoardScene): voi
     drawCellGrid(ctx, v, colEdges, guidePrices, bp);
     if (scene.livePrice > 0 && !pannedAway && rawY >= 0 && rawY <= plotBottom) {
         const dashStart = Math.max(0, Math.min(plotRight, liveX));
+        const dashEnd = Math.max(dashStart, guideEndX(scene.cells, v, plotRight));
         ctx.save();
         ctx.globalAlpha = 0.25;
         ctx.strokeStyle = bp.ink;
@@ -406,7 +419,7 @@ export function drawBoard(ctx: CanvasRenderingContext2D, scene: BoardScene): voi
         ctx.setLineDash([3, 5]);
         ctx.beginPath();
         ctx.moveTo(dashStart, rawY);
-        ctx.bezierCurveTo(dashStart, rawY, plotRight, rawY, plotRight, rawY);
+        ctx.bezierCurveTo(dashStart, rawY, dashEnd, rawY, dashEnd, rawY);
         ctx.stroke();
         ctx.setLineDash([]);
         ctx.restore();

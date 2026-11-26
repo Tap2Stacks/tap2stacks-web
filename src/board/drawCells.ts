@@ -4,6 +4,9 @@ import { payoutEmphasis } from "./fade";
 import { cellRect, plotHeight, plotWidth, priceToY, timeToX, type BoardViewport } from "./layout";
 import { formatLodMultiplier, labelFontPx, type CellLodPlan } from "./lod";
 
+/** Grid line thickness in CSS px: thin, but a full device pixel on 1x screens. */
+const GRID_LINE_PX = 1;
+
 function smoothstep(edge0: number, edge1: number, x: number): number {
   const t = Math.max(0, Math.min(1, (x - edge0) / Math.max(1e-6, edge1 - edge0)));
   return t * t * (3 - 2 * t);
@@ -59,7 +62,7 @@ export function drawCellGrid(
   for (const price of rows) {
     const y = priceToY(v, price);
     if (y >= 0 && y <= plotBottom) {
-      ctx.fillRect(0, y, plotRight, 0.5);
+      ctx.fillRect(0, y, plotRight, GRID_LINE_PX);
     }
   }
 
@@ -67,7 +70,7 @@ export function drawCellGrid(
     if (ts < v.nowMs - 1) continue;
     const x = timeToX(v, ts);
     if (x >= Math.max(0, nowX - 0.5) && x <= plotRight) {
-      ctx.fillRect(x, 0, 0.5, plotBottom);
+      ctx.fillRect(x, 0, GRID_LINE_PX, plotBottom);
     }
   }
 
@@ -147,9 +150,16 @@ export function drawCellTile(
   if (w <= 0 || h <= 0) return;
   const radius = Math.min(6, w * 0.16, h * 0.16);
   ctx.save();
-  ctx.globalAlpha = (kind === 'bet' ? 0.24 : 0.08) * clamped;
+  ctx.globalAlpha = (kind === 'bet' ? 0.24 : 0.07) * clamped;
   ctx.fillStyle = kind === 'bet' ? bp.highlight : bp.ink;
   traceRoundedRect(ctx, r.x + inset, r.y + inset, w, h, radius);
   ctx.fill();
+  if (kind === 'hover') {
+    // A crisp outline makes the touched cell read as selected, not just shaded
+    ctx.globalAlpha = 0.32 * clamped;
+    ctx.strokeStyle = bp.ink;
+    ctx.lineWidth = 1;
+    ctx.stroke();
+  }
   ctx.restore();
 }

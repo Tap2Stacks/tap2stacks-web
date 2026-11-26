@@ -26,7 +26,7 @@ it("the live column grid and a locked stack stay visible until its outcome", () 
     drawBoard(ctx, { viewport, cells: [cell], line: [], livePrice: 155, stacks: { [cell.id]: { cellId: cell.id, ticker: "NVDA", coins: [{ clientTapId: "a", status: "open", amount: 5, rate: 4.1, placedAt: 0 }] } } });
     expect(calls.some(c => c.name === "fillRect" && Number(c.args[0]) === 360 && Number(c.args[3]) === 600)).toBe(true);
     expect(calls.some(c => c.args[0] === "$5")).toBe(true);
-    expect(calls.some(c => c.name === "fillRect" && c.args[0] === 0 && c.args[2] === 1000 && c.args[3] === 0.5 && (c.alpha ?? 1) < 0.2)).toBe(true);
+    expect(calls.some(c => c.name === "fillRect" && c.args[0] === 0 && c.args[2] === 1000 && c.args[3] === 1 && (c.alpha ?? 1) < 0.2)).toBe(true);
 
     calls.length = 0;
     drawBoard(ctx, {

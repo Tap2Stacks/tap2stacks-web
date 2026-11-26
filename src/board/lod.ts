@@ -1,6 +1,5 @@
 import type { CellData } from "../store";
 import { cellRect, isLocked, plotHeight, plotWidth, type BoardViewport } from "./layout";
-import type { CoinStack } from "./types";
 import { impliedProbability } from "./cellColor";
 
 export const MAX_DRAWN_CELLS = 240;
@@ -43,10 +42,15 @@ export function textModeForSize(w: number, h: number): CellTextMode {
 }
 
 export function formatLodMultiplier(multiplier: number, mode: CellTextMode): string {
+  const rounded = Math.round(multiplier);
   if (mode === "micro" || (mode === "compact" && multiplier >= 10)) {
-    return `x${Math.round(multiplier)}`;
+    return `x${rounded}`;
   }
-  return `x${multiplier.toFixed(1)}`;
+  const oneDecimal = Math.round(multiplier * 10) / 10;
+  if (oneDecimal >= 10) {
+    return `x${Math.round(oneDecimal)}`;
+  }
+  return `x${oneDecimal.toFixed(1)}`;
 }
 
 /**
@@ -58,7 +62,6 @@ export function planCellLod(
   cells: CellData[],
   viewport: BoardViewport,
   priceStep: number,
-  _stacks: Record<string, CoinStack>,
 ): CellLodPlan {
   const plotRight = plotWidth(viewport);
   const plotBottom = plotHeight(viewport);

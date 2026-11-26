@@ -2,8 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { drawBoard, type BoardScene } from './draw';
 import { recordingContext } from '../test/recordingContext';
 import { testCell } from './fixtures';
-import { CellSpriteCache } from './cellSprites';
-import { boardPalette } from './cellColor';
+import { boardPalette, cellTextColor } from './cellColor';
 
 const scene: BoardScene = { viewport: { width: 1000, height: 600, nowMs: 10000, nowFraction: 0.3, msPerPx: 50, pricePerPx: .001, centerPrice: 155 }, cells: [testCell()], line: [{ x: 0, y: 300 }, { x: 300, y: 290 }], livePrice: 155.12, stacks: {} };
 
@@ -22,14 +21,12 @@ describe('drawBoard', () => {
         expect(calls.some(c => c.name === 'lineTo')).toBe(false);
     });
 
-    it('locked cells are drawn without heat and dimmed', () => {
+    it('draws nothing but the grid for locked cells (< 5 s ahead)', () => {
         const { ctx, calls } = recordingContext();
         drawBoard(ctx, { ...scene, cells: [testCell({ timeWindowStart: 11000 })] });
-        const lockedText = calls.find(c => c.name === 'fillText' && c.args[0] === 'x4.1');
-        expect(lockedText?.alpha).toBe(0.3);
-        // Locked tile starts at x = 300 + (11000-10000)/50 = 320
-        const lockedTile = calls.find(c => c.name === 'fillRect' && Number(c.args[0]) >= 320 && Number(c.args[0]) < 330);
-        expect(lockedTile?.alpha).toBe(0.3);
+        expect(calls.some(c => c.name === 'fillText' && c.args[0] === 'x4.1')).toBe(false);
+        expect(calls.some(c => c.name === 'drawImage')).toBe(false);
+        expect(calls.some(c => c.name === 'fillRect' && Number(c.args[0]) >= 320 && Number(c.args[3]) === 600)).toBe(true);
     });
 
     it('past cells show no odds at all while keeping coin stacks and results', () => {
@@ -67,35 +64,25 @@ describe('drawBoard', () => {
         expect(calls.some(c => c.name === 'fillText' && c.args[0] === 'Refunded')).toBe(true);
     });
 
-    it('fades far and high-multiplier cells smoothly while keeping cell tints stronger than faded text', () => {
+    it('emphasizes higher-payout multipliers with stronger alpha, weight, and heat text color without filled open tiles', () => {
         const { ctx, calls } = recordingContext();
-        const nearCell = testCell({ id: 'near', multiplier: 3.2, timeWindowStart: 15000, timeWindowEnd: 20000 });
-        const farCell = testCell({
-            id: 'far',
+        const lowCell = testCell({ id: 'low', multiplier: 2.0, timeWindowStart: 15000, timeWindowEnd: 20000 });
+        const highCell = testCell({
+            id: 'high',
             multiplier: 20,
             timeWindowStart: 40000,
             timeWindowEnd: 45000,
             original: { ...testCell().original, startTs: 40000, endTs: 45000, lowerPrice: '155.24', upperPrice: '155.27', rewardRate: '20' },
         });
-        drawBoard(ctx, { ...scene, livePrice: 155.015, cells: [nearCell, farCell] });
-        const nearText = calls.find(c => c.name === 'fillText' && c.args[0] === 'x3.2');
-        const farText = calls.find(c => c.name === 'fillText' && c.args[0] === 'x20.0');
-        const farTile = calls.find(c => c.name === 'fillRect' && Number(c.args[0]) > 850 && Number(c.args[2]) < 120);
-        expect(nearText!.alpha).toBeGreaterThan(farText!.alpha);
-        expect(farText!.alpha).toBeGreaterThanOrEqual(0.28);
-        expect(farTile!.alpha).toBeGreaterThan(farText!.alpha);
-        expect(farTile!.alpha).toBeLessThan(1);
-    });
-
-    it('uses pre-rendered cell sprites (drawImage) without shadowBlur when sprite cache is active', () => {
-        const cache = new CellSpriteCache((w, h) => {
-            const { ctx: sctx } = recordingContext();
-            return { canvas: { width: w, height: h } as unknown as HTMLCanvasElement, ctx: sctx };
-        });
-        const { ctx, calls } = recordingContext();
-        drawBoard(ctx, { ...scene, spriteCache: cache, dpr: 2 });
-        expect(calls.some(c => c.name === 'drawImage')).toBe(true);
-        expect(calls.some(c => c.name === 'lineTo')).toBe(false);
+        drawBoard(ctx, { ...scene, livePrice: 155.015, cells: [lowCell, highCell] });
+        const lowText = calls.find(c => c.name === 'fillText' && c.args[0] === 'x2.0');
+        const highText = calls.find(c => c.name === 'fillText' && c.args[0] === 'x20');
+        expect(lowText).toBeDefined();
+        expect(highText).toBeDefined();
+        expect(highText!.alpha).toBeGreaterThan(lowText!.alpha);
+        expect(lowText!.fill).toBe(cellTextColor(2.0, 'light'));
+        expect(highText!.fill).toBe(cellTextColor(20, 'light'));
+        expect(calls.some(c => c.name === 'drawImage')).toBe(false);
     });
 
     it('renders a clear not-open-yet state beyond quoted future windows', () => {
@@ -167,7 +154,7 @@ describe('drawBoard', () => {
         expect(Number(leftMarker?.args[1])).toBeLessThan(60);
     });
 
-    it('suppresses half-cut odds labels and fades tiles clipped by the right gutter', () => {
+    it('suppresses half-cut odds labels clipped by the right gutter without drawing filled tiles', () => {
         const { ctx, calls } = recordingContext();
         // plotWidth = 942, nowX = 942 * 0.3 = 282.6; cell at x = 892.6..992.6 is 50% clipped at right gutter
         const clippedCell = testCell({
@@ -182,10 +169,7 @@ describe('drawBoard', () => {
             cells: [clippedCell],
         });
         expect(calls.some(c => c.name === 'fillText' && c.args[0] === 'x4.1')).toBe(false);
-        // Tile still draws with reduced edge fade alpha
-        const tileFill = calls.find(c => c.name === 'fillRect' && Number(c.args[0]) > 880 && Number(c.args[2]) < 120);
-        expect(tileFill).toBeDefined();
-        expect(tileFill!.alpha).toBeLessThan(0.5);
+        expect(calls.some(c => c.name === 'drawImage')).toBe(false);
     });
 
     it('places NOW and time axis labels in a dedicated bottom lane strictly below the cell plot area', () => {

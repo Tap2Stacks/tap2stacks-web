@@ -2,32 +2,17 @@ import type { CellData } from '../store';
 import { THEME } from '../ui/theme';
 import { monotoneSegments, type Pt } from './curve';
 import { cellRect, plotHeight, plotWidth, priceToY, timeToX, xToTime, type BoardViewport } from './layout';
-import { cellFade } from './fade';
 import { formatBoardPrice } from './priceFormat';
 import { stackTotals } from './stacks';
 import type { CoinStack } from './types';
 import { FUTURE_LIMIT_MS, HISTORY_LIMIT_MS } from './camera';
 import {
     boardPalette,
-    cellPalette,
-    LOCKED_BUCKET,
-    paletteForBucket,
     type BoardPalette,
     type BoardThemeMode,
 } from './cellColor';
-import {
-    renderCellTile,
-    sharedCellSpriteCache,
-    traceRoundedRect,
-    type CellSpriteCache,
-} from './cellSprites';
-import {
-    formatLodMultiplier,
-    labelFontPx,
-    planCellLod,
-    type CellTextMode,
-    type RenderTile,
-} from './lod';
+import { drawCellGrid, drawCellLabels, traceRoundedRect } from './drawCells';
+import { planCellLod } from './lod';
 
 export const SETTLEMENT_DURATION_MS = 1200;
 export type { BoardThemeMode };
@@ -45,7 +30,6 @@ export interface BoardScene {
     dpr?: number;
     themeMode?: BoardThemeMode;
     isFollowing?: boolean;
-    spriteCache?: CellSpriteCache;
     flash?: {
         cellId: string;
         untilMs: number;
@@ -54,91 +38,6 @@ export interface BoardScene {
 
 export function bounds(cell: CellData) {
     return { startTs: cell.timeWindowStart, endTs: cell.timeWindowEnd, lower: Number(cell.original.lowerPrice), upper: Number(cell.original.upperPrice) };
-}
-
-function smoothstep(edge0: number, edge1: number, x: number): number {
-    const t = Math.max(0, Math.min(1, (x - edge0) / Math.max(1e-6, edge1 - edge0)));
-    return t * t * (3 - 2 * t);
-}
-
-function drawTile(
-    ctx: CanvasRenderingContext2D,
-    tile: RenderTile,
-    v: BoardViewport,
-    livePrice: number,
-    textMode: CellTextMode,
-    mode: BoardThemeMode,
-    bp: BoardPalette,
-    dpr: number,
-    spriteCache: CellSpriteCache,
-) {
-    const r = cellRect(v, tile);
-    const plotRight = plotWidth(v);
-    const plotBottom = plotHeight(v);
-    if (r.x + r.w <= 0 || r.x >= plotRight || r.y + r.h <= 0 || r.y >= plotBottom)
-        return;
-
-    // Fade partially-clipped rightmost columns smoothly into the right gutter and
-    // suppress half-cut odds labels ("x4") until the tile is almost fully inside the plot.
-    const visW = Math.min(r.x + r.w, plotRight) - Math.max(r.x, 0);
-    const visFracX = visW / Math.max(1, r.w);
-    const clippedRight = r.x + r.w > plotRight + 0.5;
-    const clippedLeft = r.x < -0.5;
-    if (clippedRight && visFracX < 0.15) return;
-    const rightEdgeFade = clippedRight ? smoothstep(0.15, 0.92, visFracX) : 1;
-
-    const visH = Math.min(r.y + r.h, plotBottom) - Math.max(r.y, 0);
-    const visFracY = visH / Math.max(1, r.h);
-
-    const visibleAheadMs = Math.max(0, plotRight * (1 - v.nowFraction) * v.msPerPx);
-    const fade = cellFade({
-        multiplier: tile.multiplier,
-        cellLower: tile.lower,
-        cellUpper: tile.upper,
-        livePrice: livePrice > 0 ? livePrice : v.centerPrice,
-        startTs: tile.startTs,
-        endTs: tile.endTs,
-        nowMs: v.nowMs,
-        visibleAheadMs,
-    });
-
-    const pal = tile.locked
-        ? paletteForBucket(LOCKED_BUCKET, mode)
-        : cellPalette(tile.multiplier, mode);
-    const tileAlpha = (tile.locked ? 0.3 : fade.tintAlpha) * rightEdgeFade;
-    const sprite = spriteCache.get(pal.bucket, r.w, r.h, dpr, mode);
-
-    ctx.globalAlpha = tileAlpha;
-    if (sprite) {
-        ctx.drawImage(
-            sprite.canvas,
-            r.x - sprite.pad,
-            r.y - sprite.pad,
-            r.w + sprite.pad * 2,
-            r.h + sprite.pad * 2,
-        );
-    } else {
-        renderCellTile(ctx, r.x, r.y, r.w, r.h, pal, false);
-    }
-
-    const canShowText =
-        textMode !== 'none' &&
-        (!clippedRight || visFracX >= 0.85) &&
-        (!clippedLeft || visFracX >= 0.85) &&
-        visFracY >= 0.7;
-
-    if (canShowText) {
-        const textEdgeFade = clippedRight ? smoothstep(0.85, 0.98, visFracX) : 1;
-        const fontSize = labelFontPx(textMode, r.w);
-        const weight = tile.locked ? 400 : fade.fontWeight;
-        ctx.globalAlpha = (tile.locked ? 0.3 : fade.textAlpha) * textEdgeFade;
-        ctx.fillStyle = bp.ink;
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.font = `${weight} ${fontSize}px ${THEME.font}`;
-        ctx.fillText(formatLodMultiplier(tile.multiplier, textMode), r.x + r.w / 2, r.y + r.h / 2);
-    }
-    ctx.globalAlpha = 1;
 }
 
 function curve(ctx: CanvasRenderingContext2D, line: Pt[]) {
@@ -189,23 +88,14 @@ function collectGuidePrices(cells: CellData[], v: BoardViewport, step: number): 
     return [...prices].sort((a, b) => b - a);
 }
 
-function drawRowGridLines(
-    ctx: CanvasRenderingContext2D,
-    prices: number[],
-    v: BoardViewport,
-    bp: BoardPalette,
-): void {
-    const right = plotWidth(v);
-    const bottom = plotHeight(v);
-    ctx.fillStyle = bp.ink;
-    ctx.globalAlpha = bp.guideAlpha;
-    for (const price of prices) {
-        const y = priceToY(v, price);
-        if (y >= 0 && y <= bottom) {
-            ctx.fillRect(0, y, right, 0.5);
-        }
+function collectColumnEdges(cells: CellData[], v: BoardViewport): number[] {
+    const edges = new Set<number>();
+    for (const cell of cells) {
+        if (cell.timeWindowEnd <= v.nowMs || cell.status === 'past') continue;
+        if (cell.timeWindowStart >= v.nowMs) edges.add(cell.timeWindowStart);
+        if (cell.timeWindowEnd >= v.nowMs) edges.add(cell.timeWindowEnd);
     }
-    ctx.globalAlpha = 1;
+    return [...edges].sort((a, b) => a - b);
 }
 
 /**
@@ -453,8 +343,6 @@ export function drawBoard(ctx: CanvasRenderingContext2D, scene: BoardScene): voi
     const { viewport: v } = scene;
     const mode: BoardThemeMode = scene.themeMode ?? 'light';
     const bp = boardPalette(mode);
-    const dpr = scene.dpr ?? 1;
-    const spriteCache = scene.spriteCache ?? sharedCellSpriteCache;
     const step = scene.priceStep ?? 0.01;
     const plotRight = plotWidth(v);
     const plotBottom = plotHeight(v);
@@ -471,6 +359,7 @@ export function drawBoard(ctx: CanvasRenderingContext2D, scene: BoardScene): voi
     }
 
     const guidePrices = collectGuidePrices(scene.cells, v, step);
+    const colEdges = collectColumnEdges(scene.cells, v);
     const liveX = timeToX(v, v.nowMs);
     const rawY = scene.livePrice > 0 ? priceToY(v, scene.livePrice) : -1;
     const pannedAway = scene.isFollowing === false || liveX < 0 || liveX > plotRight;
@@ -481,9 +370,8 @@ export function drawBoard(ctx: CanvasRenderingContext2D, scene: BoardScene): voi
     ctx.rect(0, 0, plotRight, plotBottom);
     ctx.clip();
 
-    // 0. Draw horizontal row grid lines and live-price dashed reference line UNDERNEATH cells
-    //    so cell multipliers on the live price row are never struck through ("-x2-").
-    drawRowGridLines(ctx, guidePrices, v, bp);
+    // 0. Draw thin cell grid (row lines across plot, column lines from NOW onward) and live-price dashed guide
+    drawCellGrid(ctx, v, colEdges, guidePrices, bp);
     if (scene.livePrice > 0 && !pannedAway && rawY >= 0 && rawY <= plotBottom) {
         const dashStart = Math.max(0, Math.min(plotRight, liveX));
         ctx.save();
@@ -498,11 +386,9 @@ export function drawBoard(ctx: CanvasRenderingContext2D, scene: BoardScene): voi
         ctx.restore();
     }
 
-    // 1. Render bounded future tiles using pre-rendered depth sprites & LOD
-    const lod = planCellLod(scene.cells, v, step, scene.stacks);
-    for (const tile of lod.tiles) {
-        drawTile(ctx, tile, v, scene.livePrice, lod.textMode, mode, bp, dpr, spriteCache);
-    }
+    // 1. Render open cell multiplier labels only (no filled open tiles)
+    const lod = planCellLod(scene.cells, v, step);
+    drawCellLabels(ctx, lod, v, mode, bp);
 
     // 2. Render coin stacks on both future and past cells (past area has no odds, only line + stacks)
     for (const cell of scene.cells) {

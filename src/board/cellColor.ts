@@ -190,7 +190,7 @@ export function oklchToSrgb(L: number, C: number, H: number): SrgbColor {
   const cosH = Math.cos(rad);
   const sinH = Math.sin(rad);
 
-  let c = Math.max(0, C);
+  const c = Math.max(0, C);
   let [lr, lg, lb] = oklabToLinearSrgb(safeL, c * cosH, c * sinH);
 
   // Gamut clamp by reducing chroma while preserving perceptual lightness & hue
@@ -305,4 +305,11 @@ export function cellPalette(multiplier: number, mode: BoardThemeMode = "light"):
   const t = probabilityHeat(multiplier);
   const bucket = bucketForHeat(t);
   return buildCellPalette(bucket, t, probability, mode);
+}
+
+export function cellTextColor(multiplier: number, mode: BoardThemeMode = "light"): string {
+  const t = probabilityHeat(multiplier);
+  const H = (92 - 107 * t + 360) % 360;
+  const L = mode === "dark" ? 0.82 : 0.48;
+  return oklchToSrgb(L, 0.13, H).hex;
 }

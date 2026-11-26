@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { testCell } from "./fixtures";
 import type { BoardViewport } from "./layout";
-import { labelFontPx, MAX_DRAWN_CELLS, planCellLod } from "./lod";
+import { formatLodMultiplier, labelFontPx, MAX_DRAWN_CELLS, planCellLod } from "./lod";
 
 const baseViewport: BoardViewport = {
   width: 375,
@@ -56,7 +56,7 @@ describe("planCellLod", () => {
       pricePerPx: 0.001,
     };
     const cells = makeGrid(6, 10);
-    const plan = planCellLod(cells, normalVp, 0.03, {});
+    const plan = planCellLod(cells, normalVp, 0.03);
     expect(plan.merged).toBe(false);
     expect(plan.textMode).toBe("full");
     expect(plan.tiles).toHaveLength(cells.length);
@@ -65,7 +65,7 @@ describe("planCellLod", () => {
   it("merges tiny cells and hides odds text when zoomed out so drawn count stays bounded", () => {
     // 24 five-second windows (2 full minutes) x 60 rows = 1,440 cells!
     const cells = makeGrid(24, 60);
-    const plan = planCellLod(cells, baseViewport, 0.03, {});
+    const plan = planCellLod(cells, baseViewport, 0.03);
     expect(plan.merged).toBe(true);
     expect(plan.textMode).toBe("none");
     expect(plan.tiles.length).toBeLessThanOrEqual(MAX_DRAWN_CELLS);
@@ -80,7 +80,7 @@ describe("planCellLod", () => {
   it("excludes past cells from future tile rendering", () => {
     const past = testCell({ id: "past", timeWindowStart: 2000, timeWindowEnd: 7000 });
     const future = testCell({ id: "future", timeWindowStart: 15_000, timeWindowEnd: 20_000 });
-    const plan = planCellLod([past, future], baseViewport, 0.03, {});
+    const plan = planCellLod([past, future], baseViewport, 0.03);
     expect(plan.tiles).toHaveLength(1);
     expect(plan.tiles[0].startTs).toBe(15_000);
   });
@@ -98,7 +98,7 @@ describe("planCellLod", () => {
       bottomGutter: 20,
     };
     const cells = makeGrid(24, 20);
-    const plan = planCellLod(cells, nvdaPhone60s, 0.03, {});
+    const plan = planCellLod(cells, nvdaPhone60s, 0.03);
     expect(plan.merged).toBe(false);
     expect(plan.textMode).toBe("micro");
     expect(plan.tiles.length).toBeLessThanOrEqual(MAX_DRAWN_CELLS);
@@ -116,5 +116,19 @@ describe("labelFontPx", () => {
     expect(labelFontPx("compact", 28)).toBe(9.5);
     expect(labelFontPx("compact", 30)).toBe(10);
     expect(labelFontPx("micro", 16)).toBe(8.5);
+  });
+});
+
+describe("formatLodMultiplier", () => {
+  it("formats x2.1 below 10 and rounded integers from 10 up in full mode", () => {
+    expect(formatLodMultiplier(2.14, "full")).toBe("x2.1");
+    expect(formatLodMultiplier(9.96, "full")).toBe("x10");
+    expect(formatLodMultiplier(13.4, "full")).toBe("x13");
+    expect(formatLodMultiplier(25, "full")).toBe("x25");
+  });
+
+  it("keeps micro mode rounded integers", () => {
+    expect(formatLodMultiplier(2.14, "micro")).toBe("x2");
+    expect(formatLodMultiplier(13.4, "micro")).toBe("x13");
   });
 });

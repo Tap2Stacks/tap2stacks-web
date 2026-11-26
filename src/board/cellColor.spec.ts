@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
+  boardPalette,
   cellOklch,
   cellPalette,
+  cellTextColor,
   COLOR_BUCKETS,
   impliedProbability,
   logOdds,
@@ -89,5 +91,40 @@ describe("computed perceptual cell colour scale (OKLCH on log-odds)", () => {
     const likely = cellPalette(2, "light");
     const rare = cellPalette(40, "light");
     expect(likely.shadowAlpha).toBeGreaterThan(rare.shadowAlpha);
+  });
+
+  it("maps cellTextColor from gold to rose with >= 4.5:1 contrast on light surface", () => {
+    const surface = boardPalette("light").surface;
+    const toLin = (c: number) => {
+      const s = c / 255;
+      return s <= 0.04045 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
+    };
+    const lum = (hex: string) => {
+      const r = parseInt(hex.slice(1, 3), 16);
+      const g = parseInt(hex.slice(3, 5), 16);
+      const b = parseInt(hex.slice(5, 7), 16);
+      return 0.2126 * toLin(r) + 0.7152 * toLin(g) + 0.0722 * toLin(b);
+    };
+    const bgLum = lum(surface);
+
+    const lowHex = cellTextColor(1.3, "light");
+    const highHex = cellTextColor(25, "light");
+    expect(lowHex).toMatch(/^#[0-9a-f]{6}$/i);
+    expect(highHex).toMatch(/^#[0-9a-f]{6}$/i);
+    // Gold has stronger green than red-rose; rose has higher red relative to green
+    const lowR = parseInt(lowHex.slice(1, 3), 16);
+    const lowG = parseInt(lowHex.slice(3, 5), 16);
+    const lowB = parseInt(lowHex.slice(5, 7), 16);
+    const highR = parseInt(highHex.slice(1, 3), 16);
+    const highB = parseInt(highHex.slice(5, 7), 16);
+    expect(lowG).toBeGreaterThan(lowB);
+    expect(highR).toBeGreaterThan(lowR);
+    expect(highB).toBeGreaterThan(lowB);
+
+    for (const m of [1.1, 1.3, 1.8, 2.5, 4, 7, 12, 20, 25, 45, 80]) {
+      const fg = cellTextColor(m, "light");
+      const cr = (bgLum + 0.05) / (lum(fg) + 0.05);
+      expect(cr).toBeGreaterThanOrEqual(4.5);
+    }
   });
 });

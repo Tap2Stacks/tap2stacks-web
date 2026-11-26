@@ -25,6 +25,9 @@ const desktopMetrics: CameraMetrics = {
   cellPx: 100,
   quotedRows: 20,
   quotedCols: 6,
+  // 20 quoted rows of 0.03 around 155, as the runtime passes them
+  minSeriesPrice: 154.7,
+  maxSeriesPrice: 155.3,
 };
 
 // The real desktop layout: 1280x720, gutters 58/20, NOW at 38%, 84 px boxes, 20 rows x 6 columns quoted.
@@ -112,6 +115,23 @@ describe("camera zoom, pan transforms and clamps", () => {
     expect(boxSide(afterQuotes.viewport)).toBeGreaterThanOrEqual(minCellPx(moreCols) - 1e-6);
   });
 
+  it("does not zoom in by itself when the zoom-out limit tightens and then relaxes", () => {
+    const cam = new BoardCamera();
+    for (let i = 0; i < 20; i++) cam.zoomAt(0.75, 600, 300, liveDesktop, 10_000, 155);
+    const tight = { ...liveDesktop, quotedCols: 24 };
+    expect(boxSide(cam.step(16, 16, 10_000, 155, tight, false).viewport)).toBeCloseTo(minCellPx(tight), 6);
+    expect(boxSide(cam.step(32, 16, 10_000, 155, liveDesktop, false).viewport)).toBeCloseTo(35, 6);
+  });
+
+  it("keeps vertical panning within the quoted rows plus one row", () => {
+    const span = 0.24; // about 8 rows of 0.03 in view
+    const b = priceBounds(155, 0.03, span, 154.7, 155.3);
+    expect(b.maxPrice).toBeCloseTo(155.3 - span / 2 + 0.03, 9);
+    expect(b.minPrice).toBeCloseTo(154.7 + span / 2 - 0.03, 9);
+    const wide = priceBounds(155, 0.03, 2, 154.9, 155.1);
+    expect(wide.minPrice).toBeCloseTo(wide.maxPrice, 9);
+  });
+
   it("clamps one zoom value within its bounds", () => {
     expect(clampZoom(0.01, 0.4)).toBe(0.4);
     expect(clampZoom(99, 0.4)).toBe(MAX_CELL_ZOOM);
@@ -137,11 +157,12 @@ describe("camera zoom, pan transforms and clamps", () => {
     expect(rightEdge).toBeCloseTo(FUTURE_LIMIT_MS, 6);
   });
 
-  it("computes bounded vertical price limits covering history and live price", () => {
+  it("keeps the price bounds inside the history and live price range and never negative", () => {
     const b = priceBounds(155, 0.03, 0.6, 154.2, 155.9);
-    expect(b.minPrice).toBeLessThan(154.2);
-    expect(b.maxPrice).toBeGreaterThan(155.9);
-    expect(b.minPrice).toBeGreaterThanOrEqual(0);
+    expect(b.minPrice).toBeGreaterThan(154.2);
+    expect(b.maxPrice).toBeLessThan(155.9);
+    expect(b.minPrice).toBeLessThanOrEqual(b.maxPrice);
+    expect(priceBounds(0.01, 0.03, 0.6).minPrice).toBeGreaterThanOrEqual(0);
   });
 
   it("applies monotonic, bounded hyperbolic rubber-band edge resistance", () => {

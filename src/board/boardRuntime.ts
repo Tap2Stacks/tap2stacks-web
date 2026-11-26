@@ -4,6 +4,7 @@ import { createChartClock } from './clock';
 import { createSmoothValue } from './smooth';
 import { cellRect, hitTestCell, isLocked, plotHeight, plotWidth, priceToY, timeToX, xToTime, type BoardViewport } from './layout';
 import { boardScale } from './boardScale';
+import { quotedGridSize } from './quotedGrid';
 import { PHONE_BREAKPOINT } from '../shell/useIsPhone';
 import { createDrawnSeries, decimateVisibleLine } from './drawnSeries';
 import { visibleCells } from './retainedCells';
@@ -235,17 +236,10 @@ export class BoardRuntime {
             if (p.price < minSeriesPrice) minSeriesPrice = p.price;
             if (p.price > maxSeriesPrice) maxSeriesPrice = p.price;
         }
-        // Quoted future boxes set how far zooming out may go (every priced box fits, about 200 at most).
-        const quotedRowKeys = new Set<string>();
-        const quotedColKeys = new Set<number>();
         let maxQuotedEndTs = now;
         for (const c of state.cells) {
             if (c.original.ticker !== state.ticker) continue;
             if (c.timeWindowEnd > maxQuotedEndTs) maxQuotedEndTs = c.timeWindowEnd;
-            if (c.timeWindowEnd > now) {
-                quotedRowKeys.add(String(c.original.lowerPrice));
-                quotedColKeys.add(c.timeWindowStart);
-            }
             const lo = Number(c.original.lowerPrice);
             const hi = Number(c.original.upperPrice);
             if (Number.isFinite(lo) && lo < minSeriesPrice) minSeriesPrice = lo;
@@ -257,14 +251,16 @@ export class BoardRuntime {
             this.size.height,
             window.innerWidth < PHONE_BREAKPOINT,
         );
+        const quoted = quotedGridSize(state.cells, state.ticker, now, state.modePriceStep);
         const metrics: CameraMetrics = {
             width: this.size.width,
             height: this.size.height,
             nowFraction: scale.nowFraction,
             priceStep: state.modePriceStep,
             cellPx: scale.cellPx,
-            quotedRows: quotedRowKeys.size,
-            quotedCols: quotedColKeys.size,
+            // The grid being quoted now sets how far zooming out may go (every priced box fits, about 200 at most)
+            quotedRows: quoted.rows,
+            quotedCols: quoted.cols,
             rightGutter: scale.rightGutter,
             bottomGutter: scale.bottomGutter,
             minSeriesPrice: Number.isFinite(minSeriesPrice) ? minSeriesPrice : undefined,

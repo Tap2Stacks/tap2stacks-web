@@ -119,6 +119,11 @@ export function timeOffsetBounds(
   return { minOffsetMs, maxOffsetMs };
 }
 
+/**
+ * Range for the view's centre price when panned: the view stays within the
+ * history, live price and quoted rows (passed as min/max series price), plus
+ * one row. When the data is shorter than the view, the centre is fixed midway.
+ */
 export function priceBounds(
   livePrice: number,
   priceStep: number,
@@ -136,9 +141,14 @@ export function priceBounds(
     maxSeriesPrice !== undefined && Number.isFinite(maxSeriesPrice) && maxSeriesPrice > 0
       ? Math.max(anchor, maxSeriesPrice)
       : anchor;
-  const pad = Math.max(step * 20, visiblePriceSpan * 0.6);
-  const minPrice = Math.max(0, lowRef - pad);
-  const maxPrice = Math.max(minPrice + step, highRef + pad);
+  const half = Number.isFinite(visiblePriceSpan) && visiblePriceSpan > 0 ? visiblePriceSpan / 2 : 0;
+  let minPrice = Math.max(0, lowRef + half - step);
+  let maxPrice = highRef - half + step;
+  if (minPrice > maxPrice) {
+    const mid = Math.max(0, (lowRef + highRef) / 2);
+    minPrice = mid;
+    maxPrice = mid;
+  }
   return { minPrice, maxPrice };
 }
 
@@ -484,8 +494,8 @@ export class BoardCamera {
     }
 
     // Clamp zoom to current container dimensions
+    // Clamp for display only: keeping the player's zoom means a limit that tightens and relaxes never ratchets it
     const z = clampZoom(this.zoom, minZoom);
-    this.zoom = z;
     const msPerPx = baseMsPerPx / z;
     const pricePerPx = basePricePerPx / z;
     const tBounds = timeOffsetBounds(plotW, metrics.nowFraction, msPerPx);

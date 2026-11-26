@@ -264,3 +264,15 @@ it('keeps a mixed stack visible from its latest settlement, regardless of coin o
     });
     expect(calls.some(c => c.name === 'fillText' && c.args[0] === 'Settled')).toBe(true);
 });
+
+it('keeps the dashed live-price guide muted (alpha <= 0.35) and passes a 4 s gold tail to the price line', () => {
+    const { ctx, calls } = recordingContext();
+    drawBoard(ctx, scene);
+    const setDashIdx = calls.findIndex(c => c.name === 'setLineDash' && Array.isArray(c.args[0]) && (c.args[0] as number[]).length > 0);
+    expect(setDashIdx).toBeGreaterThan(-1);
+    const guideStroke = calls.slice(setDashIdx).find(c => c.name === 'stroke');
+    expect(guideStroke).toBeDefined();
+    expect(guideStroke!.alpha).toBeLessThanOrEqual(0.35);
+    expect(calls.some(c => c.name === 'createLinearGradient')).toBe(true);
+    expect(calls.some(c => c.name === 'createRadialGradient')).toBe(true);
+});

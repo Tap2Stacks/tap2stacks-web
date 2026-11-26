@@ -146,7 +146,7 @@ it('keeps the same square 60 px phone boxes when switching between a 24-window a
 
 it('setHover fades hover alpha in over ~120 ms on open cells, clears on locked/empty/ticker-switch, and snaps under reduced motion', () => {
     let frame: FrameRequestCallback = () => { };
-    let wall = 10000;
+    const wall = 10000;
     let reducedMatches = false;
     vi.stubGlobal('requestAnimationFrame', (cb: FrameRequestCallback) => { frame = cb; return 1; });
     vi.stubGlobal('cancelAnimationFrame', () => { });

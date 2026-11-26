@@ -1,6 +1,6 @@
 import type { CellData } from '../store';
 import { THEME } from '../ui/theme';
-import { monotoneSegments, type Pt } from './curve';
+import type { Pt } from './curve';
 import { cellRect, isLocked, plotHeight, plotWidth, priceToY, timeToX, xToTime, type BoardViewport } from './layout';
 import { formatBoardPrice } from './priceFormat';
 import { stackTotals } from './stacks';
@@ -12,6 +12,7 @@ import {
     type BoardThemeMode,
 } from './cellColor';
 import { drawCellGrid, drawCellLabels, drawCellTile, traceRoundedRect } from './drawCells';
+import { curve, drawLiveDot, drawPriceLine, TAIL_MS } from './drawLine';
 import { planCellLod } from './lod';
 
 export const SETTLEMENT_DURATION_MS = 1200;
@@ -42,16 +43,6 @@ export interface BoardScene {
 
 export function bounds(cell: CellData) {
     return { startTs: cell.timeWindowStart, endTs: cell.timeWindowEnd, lower: Number(cell.original.lowerPrice), upper: Number(cell.original.upperPrice) };
-}
-
-function curve(ctx: CanvasRenderingContext2D, line: Pt[]) {
-    if (!line.length)
-        return;
-    ctx.beginPath();
-    ctx.moveTo(line[0].x, line[0].y);
-    for (const s of monotoneSegments(line))
-        ctx.bezierCurveTo(s.c1x, s.c1y, s.c2x, s.c2y, s.x1, s.y1);
-    ctx.stroke();
 }
 
 function flash(ctx: CanvasRenderingContext2D, scene: BoardScene, bp: BoardPalette) {
@@ -409,6 +400,7 @@ export function drawBoard(ctx: CanvasRenderingContext2D, scene: BoardScene): voi
     if (scene.livePrice > 0 && !pannedAway && rawY >= 0 && rawY <= plotBottom) {
         const dashStart = Math.max(0, Math.min(plotRight, liveX));
         ctx.save();
+        ctx.globalAlpha = 0.25;
         ctx.strokeStyle = bp.ink;
         ctx.lineWidth = 1;
         ctx.setLineDash([3, 5]);
@@ -431,31 +423,13 @@ export function drawBoard(ctx: CanvasRenderingContext2D, scene: BoardScene): voi
 
     drawNotOpenYetZone(ctx, v, maxQuotedEndTs, bp);
 
-    ctx.strokeStyle = bp.ink;
-    ctx.lineWidth = 2.5;
-    ctx.lineJoin = 'round';
-    ctx.lineCap = 'round';
-    curve(ctx, scene.line);
+    const tailStartX = timeToX(v, v.nowMs - TAIL_MS);
+    drawPriceLine(ctx, scene.line, tailStartX, bp);
     flash(ctx, scene, bp);
 
     if (scene.livePrice > 0 && rawY >= 0 && rawY <= plotBottom) {
         if (liveX >= -16 && liveX <= plotRight + 16) {
-            if (!scene.reducedMotion && !pannedAway) {
-                const phase = (v.nowMs % 1600) / 1600;
-                ctx.save();
-                ctx.globalAlpha = .18 * (1 - phase);
-                ctx.strokeStyle = bp.ink;
-                ctx.lineWidth = 1;
-                ctx.beginPath();
-                ctx.arc(liveX, rawY, 6 + phase * 5, 0, Math.PI * 2);
-                ctx.stroke();
-                ctx.restore();
-            }
-            ctx.globalAlpha = 1;
-            ctx.beginPath();
-            ctx.arc(liveX, rawY, 4 + (scene.reducedMotion ? 0 : Math.sin(v.nowMs / 250) * .6), 0, Math.PI * 2);
-            ctx.fillStyle = bp.ink;
-            ctx.fill();
+            drawLiveDot(ctx, liveX, rawY, v.nowMs, !!scene.reducedMotion, bp);
         }
     }
     ctx.restore();

@@ -112,9 +112,8 @@ export function BoardCanvas({ onTapCell, flash }: {
             const factor = Math.max(0.75, Math.min(1.35, Math.exp(-event.deltaY * sensitivity)));
             const canvasX = (event.clientX - r.left) * v.width / r.width;
             const canvasY = (event.clientY - r.top) * v.height / r.height;
-            const factorTime = event.shiftKey ? 1 : factor;
-            const factorPrice = event.altKey ? 1 : factor;
-            board.zoomAt(factorTime, factorPrice, canvasX, canvasY);
+            // One factor for both directions keeps the boxes square
+            board.zoomAt(factor, canvasX, canvasY);
         };
 
         el.addEventListener('wheel', onWheel, { passive: false });
@@ -186,7 +185,7 @@ export function BoardCanvas({ onTapCell, flash }: {
             if (g.pinchDist > 8 && m.dist > 8) {
                 const scale = Math.max(0.7, Math.min(1.4, m.dist / g.pinchDist));
                 const anchor = toCanvasCoords(m.midX, m.midY);
-                board.zoomAt(scale, scale, anchor.x, anchor.y);
+                board.zoomAt(scale, anchor.x, anchor.y);
             }
             const dMidX = m.midX - g.pinchMidX;
             const dMidY = m.midY - g.pinchMidY;

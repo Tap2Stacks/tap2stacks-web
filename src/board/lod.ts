@@ -28,6 +28,13 @@ export interface CellLodPlan {
   rowStride: number;
 }
 
+/** Multiplier label size in px: full labels grow with the box so bigger boxes read bigger. */
+export function labelFontPx(mode: CellTextMode, cellW: number): number {
+  if (mode === "micro") return 8.5;
+  if (mode === "compact") return cellW < 29 ? 9.5 : 10;
+  return Math.min(20, Math.max(11, Math.round(cellW * 0.2)));
+}
+
 export function textModeForSize(w: number, h: number): CellTextMode {
   if (w >= 34 && h >= 18) return "full";
   if (w >= 20 && h >= 14) return "compact";

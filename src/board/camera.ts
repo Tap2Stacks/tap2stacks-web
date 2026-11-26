@@ -2,11 +2,14 @@ import type { BoardViewport } from "./layout";
 
 export const HISTORY_LIMIT_MS = 5 * 60 * 1000; // 5 minutes back
 export const FUTURE_LIMIT_MS = 2 * 60 * 1000; // 2 minutes ahead
-export const DEFAULT_VISIBLE_AHEAD_MS = 35_000;
-
-export const MAX_TIME_ZOOM = 2.5;
-export const MIN_PRICE_ZOOM = 0.25;
-export const MAX_PRICE_ZOOM = 2.5;
+/** One board column is one 5-second window; a box is one window wide and one price step tall. */
+export const WINDOW_MS = 5_000;
+/** Zooming in stops at twice the default box side. */
+export const MAX_CELL_ZOOM = 2;
+/** Zooming out never makes a box smaller than this, so multipliers stay readable. */
+export const MIN_CELL_PX = 28;
+/** Zooming out stops once about this many priced boxes are in view. */
+export const MAX_PRICED_CELLS_IN_VIEW = 200;
 
 const RUBBER_BAND_COEFF = 0.55;
 const RUBBER_BAND_FRACTION = 0.25;
@@ -21,9 +24,12 @@ export interface CameraMetrics {
   width: number;
   height: number;
   nowFraction: number;
-  visibleRows: number;
   priceStep: number;
-  defaultAheadMs?: number;
+  /** Default box side in px (square: one window wide, one price step tall). */
+  cellPx: number;
+  /** Price rows and future columns the engine currently quotes; 0 when nothing is quoted yet. */
+  quotedRows: number;
+  quotedCols: number;
   rightGutter?: number;
   bottomGutter?: number;
   minSeriesPrice?: number;
@@ -45,37 +51,52 @@ function effectivePlotHeight(metrics: Pick<CameraMetrics, "height" | "bottomGutt
   return Math.max(1, metrics.height - (metrics.bottomGutter ?? 0));
 }
 
+/**
+ * Smallest box side zooming out may reach: every priced box fits, or about
+ * MAX_PRICED_CELLS_IN_VIEW priced boxes are in view, whichever is larger, and
+ * never below MIN_CELL_PX.
+ */
+export function minCellPx(metrics: CameraMetrics): number {
+  const rows = metrics.quotedRows;
+  const cols = metrics.quotedCols;
+  if (!(rows > 0) || !(cols > 0)) return MIN_CELL_PX;
+  const plotH = effectivePlotHeight(metrics);
+  const futureW = effectivePlotWidth(metrics) * Math.max(0.1, 1 - metrics.nowFraction);
+  const fitAll = Math.min(plotH / rows, futureW / cols);
+  const inView = (side: number) => Math.min(rows, plotH / side) * Math.min(cols, futureW / side);
+  // inView falls as the side grows: find the smallest side with at most the cap in view.
+  let lo = 1;
+  let hi = Math.max(plotH, futureW);
+  if (inView(lo) > MAX_PRICED_CELLS_IN_VIEW) {
+    for (let i = 0; i < 50; i++) {
+      const mid = (lo + hi) / 2;
+      if (inView(mid) > MAX_PRICED_CELLS_IN_VIEW) lo = mid;
+      else hi = mid;
+    }
+  } else {
+    hi = lo;
+  }
+  return Math.max(fitAll, hi, MIN_CELL_PX);
+}
+
 export function baseScaleFor(metrics: CameraMetrics): {
   baseMsPerPx: number;
   basePricePerPx: number;
-  minTimeZoom: number;
+  minZoom: number;
 } {
-  const plotW = effectivePlotWidth(metrics);
-  const plotH = effectivePlotHeight(metrics);
-  const futureFraction = Math.max(0.1, 1 - metrics.nowFraction);
-  const aheadMs =
-    metrics.defaultAheadMs !== undefined && Number.isFinite(metrics.defaultAheadMs) && metrics.defaultAheadMs > 0
-      ? metrics.defaultAheadMs
-      : DEFAULT_VISIBLE_AHEAD_MS;
-  const baseMsPerPx = aheadMs / (plotW * futureFraction);
-  const maxMsPerPx = (HISTORY_LIMIT_MS + FUTURE_LIMIT_MS) / plotW;
-  const minTimeZoom = Math.min(1, baseMsPerPx / maxMsPerPx);
+  const cell = Number.isFinite(metrics.cellPx) && metrics.cellPx > 0 ? metrics.cellPx : 84;
   const step = Number.isFinite(metrics.priceStep) && metrics.priceStep > 0 ? metrics.priceStep : 0.03;
-  const basePricePerPx = (step * Math.max(1, metrics.visibleRows)) / plotH;
-  return { baseMsPerPx, basePricePerPx, minTimeZoom };
+  return {
+    baseMsPerPx: WINDOW_MS / cell,
+    basePricePerPx: step / cell,
+    minZoom: Math.min(1, minCellPx(metrics) / cell),
+  };
 }
 
-export function clampZoom(
-  timeZoom: number,
-  priceZoom: number,
-  minTimeZoom: number,
-): { timeZoom: number; priceZoom: number } {
-  const safeT = Number.isFinite(timeZoom) ? timeZoom : 1;
-  const safeP = Number.isFinite(priceZoom) ? priceZoom : 1;
-  return {
-    timeZoom: Math.max(minTimeZoom, Math.min(MAX_TIME_ZOOM, safeT)),
-    priceZoom: Math.max(MIN_PRICE_ZOOM, Math.min(MAX_PRICE_ZOOM, safeP)),
-  };
+/** One zoom for both axes, so boxes stay square. */
+export function clampZoom(zoom: number, minZoom: number): number {
+  const safe = Number.isFinite(zoom) ? zoom : 1;
+  return Math.max(minZoom, Math.min(MAX_CELL_ZOOM, safe));
 }
 
 /**
@@ -146,14 +167,12 @@ interface SnapAnimation {
   startPerf: number;
   fromTimeOffsetMs: number;
   fromPriceOffset: number;
-  fromTimeZoom: number;
-  fromPriceZoom: number;
+  fromZoom: number;
 }
 
 export class BoardCamera {
   private following = true;
-  private timeZoom = 1;
-  private priceZoom = 1;
+  private zoom = 1;
   /** World timestamp anchored at `width * nowFraction` when not following. */
   private rawViewNowMs: number | null = null;
   /** World price anchored at `height / 2` when not following. */
@@ -170,15 +189,13 @@ export class BoardCamera {
 
   get isZoomed(): boolean {
     return (
-      Math.abs(this.timeZoom - 1) > ZOOM_EPS ||
-      Math.abs(this.priceZoom - 1) > ZOOM_EPS
+      Math.abs(this.zoom - 1) > ZOOM_EPS
     );
   }
 
   reset(): void {
     this.following = true;
-    this.timeZoom = 1;
-    this.priceZoom = 1;
+    this.zoom = 1;
     this.rawViewNowMs = null;
     this.rawCenterPrice = null;
     this.vxPxPerMs = 0;
@@ -213,10 +230,10 @@ export class BoardCamera {
     this.following = false;
     this.snapAnim = null;
 
-    const { baseMsPerPx, basePricePerPx, minTimeZoom } = baseScaleFor(metrics);
-    const z = clampZoom(this.timeZoom, this.priceZoom, minTimeZoom);
-    const msPerPx = baseMsPerPx / z.timeZoom;
-    const pricePerPx = basePricePerPx / z.priceZoom;
+    const { baseMsPerPx, basePricePerPx, minZoom } = baseScaleFor(metrics);
+    const z = clampZoom(this.zoom, minZoom);
+    const msPerPx = baseMsPerPx / z;
+    const pricePerPx = basePricePerPx / z;
 
     // Dragging finger right (+dx) moves content right -> shifts view earlier in time (-dt)
     this.rawViewNowMs = (this.rawViewNowMs ?? nowMs) - dxPx * msPerPx;
@@ -237,10 +254,10 @@ export class BoardCamera {
       return;
     }
 
-    const { baseMsPerPx, basePricePerPx, minTimeZoom } = baseScaleFor(metrics);
-    const z = clampZoom(this.timeZoom, this.priceZoom, minTimeZoom);
-    const msPerPx = baseMsPerPx / z.timeZoom;
-    const pricePerPx = basePricePerPx / z.priceZoom;
+    const { baseMsPerPx, basePricePerPx, minZoom } = baseScaleFor(metrics);
+    const z = clampZoom(this.zoom, minZoom);
+    const msPerPx = baseMsPerPx / z;
+    const pricePerPx = basePricePerPx / z;
 
     const plotW = effectivePlotWidth(metrics);
     const tBounds = timeOffsetBounds(plotW, metrics.nowFraction, msPerPx);
@@ -299,10 +316,10 @@ export class BoardCamera {
     this.vxPxPerMs = 0;
     this.vyPxPerMs = 0;
 
-    const { baseMsPerPx, basePricePerPx, minTimeZoom } = baseScaleFor(metrics);
-    const z = clampZoom(this.timeZoom, this.priceZoom, minTimeZoom);
-    const msPerPx = baseMsPerPx / z.timeZoom;
-    const pricePerPx = basePricePerPx / z.priceZoom;
+    const { baseMsPerPx, basePricePerPx, minZoom } = baseScaleFor(metrics);
+    const z = clampZoom(this.zoom, minZoom);
+    const msPerPx = baseMsPerPx / z;
+    const pricePerPx = basePricePerPx / z;
 
     const plotW = effectivePlotWidth(metrics);
     const tBounds = timeOffsetBounds(plotW, metrics.nowFraction, msPerPx);
@@ -320,30 +337,27 @@ export class BoardCamera {
   }
 
   zoomAt(
-    factorTime: number,
-    factorPrice: number,
+    factor: number,
     anchorX: number,
     anchorY: number,
     metrics: CameraMetrics,
     nowMs: number,
     liveCenterPrice: number,
   ): void {
-    const safeFt = Number.isFinite(factorTime) && factorTime > 0 ? factorTime : 1;
-    const safeFp = Number.isFinite(factorPrice) && factorPrice > 0 ? factorPrice : 1;
-    if (safeFt === 1 && safeFp === 1) return;
+    const safeF = Number.isFinite(factor) && factor > 0 ? factor : 1;
+    if (safeF === 1) return;
 
     this.snapAnim = null;
-    const { baseMsPerPx, basePricePerPx, minTimeZoom } = baseScaleFor(metrics);
-    const prevZ = clampZoom(this.timeZoom, this.priceZoom, minTimeZoom);
-    const nextZ = clampZoom(prevZ.timeZoom * safeFt, prevZ.priceZoom * safeFp, minTimeZoom);
+    const { baseMsPerPx, basePricePerPx, minZoom } = baseScaleFor(metrics);
+    const prevZ = clampZoom(this.zoom, minZoom);
+    const nextZ = clampZoom(prevZ * safeF, minZoom);
 
-    const prevMsPerPx = baseMsPerPx / prevZ.timeZoom;
-    const nextMsPerPx = baseMsPerPx / nextZ.timeZoom;
-    const prevPricePerPx = basePricePerPx / prevZ.priceZoom;
-    const nextPricePerPx = basePricePerPx / nextZ.priceZoom;
+    const prevMsPerPx = baseMsPerPx / prevZ;
+    const nextMsPerPx = baseMsPerPx / nextZ;
+    const prevPricePerPx = basePricePerPx / prevZ;
+    const nextPricePerPx = basePricePerPx / nextZ;
 
-    this.timeZoom = nextZ.timeZoom;
-    this.priceZoom = nextZ.priceZoom;
+    this.zoom = nextZ;
 
     // In live-follow mode, keep auto-follow active so zooming out to see 2 min ahead stays live
     if (this.following || this.rawViewNowMs === null || this.rawCenterPrice === null) {
@@ -385,8 +399,7 @@ export class BoardCamera {
 
     const fromTimeOffsetMs = this.following || this.rawViewNowMs === null ? 0 : this.rawViewNowMs - nowMs;
     const fromPriceOffset = this.following || this.rawCenterPrice === null ? 0 : this.rawCenterPrice - liveCenterPrice;
-    const fromTimeZoom = this.timeZoom;
-    const fromPriceZoom = this.priceZoom;
+    const fromZoom = this.zoom;
 
     this.following = true;
     this.rawViewNowMs = null;
@@ -396,11 +409,9 @@ export class BoardCamera {
       reducedMotion ||
       (Math.abs(fromTimeOffsetMs) < 1 &&
         Math.abs(fromPriceOffset) < 1e-6 &&
-        Math.abs(fromTimeZoom - 1) < 1e-4 &&
-        Math.abs(fromPriceZoom - 1) < 1e-4)
+        Math.abs(fromZoom - 1) < 1e-4)
     ) {
-      this.timeZoom = 1;
-      this.priceZoom = 1;
+      this.zoom = 1;
       this.snapAnim = null;
       return;
     }
@@ -409,8 +420,7 @@ export class BoardCamera {
       startPerf: perfMs,
       fromTimeOffsetMs,
       fromPriceOffset,
-      fromTimeZoom,
-      fromPriceZoom,
+      fromZoom,
     };
   }
 
@@ -427,7 +437,7 @@ export class BoardCamera {
     const plotH = effectivePlotHeight(metrics);
     const rightGutter = metrics.rightGutter ?? 0;
     const bottomGutter = metrics.bottomGutter ?? 0;
-    const { baseMsPerPx, basePricePerPx, minTimeZoom } = baseScaleFor(metrics);
+    const { baseMsPerPx, basePricePerPx, minZoom } = baseScaleFor(metrics);
     let moving = false;
 
     // 1. Handle active snap-to-live animation
@@ -438,19 +448,17 @@ export class BoardCamera {
       const ease = 1 - Math.pow(1 - progress, 3);
       const inv = 1 - ease;
 
-      this.timeZoom = 1 + (this.snapAnim.fromTimeZoom - 1) * inv;
-      this.priceZoom = 1 + (this.snapAnim.fromPriceZoom - 1) * inv;
+      this.zoom = 1 + (this.snapAnim.fromZoom - 1) * inv;
 
-      const z = clampZoom(this.timeZoom, this.priceZoom, minTimeZoom);
-      const msPerPx = baseMsPerPx / z.timeZoom;
-      const pricePerPx = basePricePerPx / z.priceZoom;
+      const z = clampZoom(this.zoom, minZoom);
+      const msPerPx = baseMsPerPx / z;
+      const pricePerPx = basePricePerPx / z;
       const tBounds = timeOffsetBounds(plotW, metrics.nowFraction, msPerPx);
       const offsetMs = clamp(this.snapAnim.fromTimeOffsetMs * inv, tBounds.minOffsetMs, tBounds.maxOffsetMs);
       const centerPrice = liveCenterPrice + this.snapAnim.fromPriceOffset * inv;
 
       if (progress >= 1) {
-        this.timeZoom = 1;
-        this.priceZoom = 1;
+        this.zoom = 1;
         this.snapAnim = null;
       } else {
         moving = true;
@@ -476,11 +484,10 @@ export class BoardCamera {
     }
 
     // Clamp zoom to current container dimensions
-    const z = clampZoom(this.timeZoom, this.priceZoom, minTimeZoom);
-    this.timeZoom = z.timeZoom;
-    this.priceZoom = z.priceZoom;
-    const msPerPx = baseMsPerPx / z.timeZoom;
-    const pricePerPx = basePricePerPx / z.priceZoom;
+    const z = clampZoom(this.zoom, minZoom);
+    this.zoom = z;
+    const msPerPx = baseMsPerPx / z;
+    const pricePerPx = basePricePerPx / z;
     const tBounds = timeOffsetBounds(plotW, metrics.nowFraction, msPerPx);
     const pBounds = priceBounds(
       liveCenterPrice,

@@ -2,6 +2,7 @@ import { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, expect, it, vi } from 'vitest';
 import { BoardCanvas } from './BoardCanvas';
+import { BoardRuntime } from './boardRuntime';
 import { useGameStore } from '../store';
 import { fetchRecentPrices } from '../api/prices';
 import { recordingContext } from '../test/recordingContext';
@@ -48,11 +49,11 @@ it('BoardCanvas seeds recent prices on mount and ticker change; open taps work a
     expect(fetchRecentPrices).toHaveBeenCalledWith('NVDA');
     expect(seriesFor('NVDA').since(0)).toContainEqual({ ts: 9000, price: 155 });
     const canvas = div.querySelector('canvas')!;
-    // With nowFraction=0.5, rightGutter=58 (plotWidth=942), bottomGutter=20 (plotHeight=580),
-    // testCell (15s..20s, 155.00..155.03) spans x=538..606, y=261..290.
+    // With nowFraction=0.38, rightGutter=58 (plotWidth=942), bottomGutter=20 (plotHeight=580) and 84 px
+    // square boxes, testCell (15s..20s, 155.00..155.03) spans x=442..526, y=206..290.
     act(() => {
-        canvas.dispatchEvent(pointerEvent('pointerdown', { clientX: 572, clientY: 276 }));
-        canvas.dispatchEvent(pointerEvent('pointerup', { clientX: 572, clientY: 276 }));
+        canvas.dispatchEvent(pointerEvent('pointerdown', { clientX: 484, clientY: 248 }));
+        canvas.dispatchEvent(pointerEvent('pointerup', { clientX: 484, clientY: 248 }));
     });
     expect(tap).toHaveBeenCalledWith(cell);
     useGameStore.setState({ cells: [testCell({ timeWindowStart: 11000 })] });
@@ -111,9 +112,9 @@ it('wheel zoom and two-finger pinch zoom never fire cell taps', async () => {
     step(0);
     const canvas = div.querySelector('canvas')!;
 
-    // Wheel zoom out reveals Live reset affordance
+    // Wheel zoom in reveals Live reset affordance (with one quoted box everything already fits, so zoom-out has no room)
     act(() => {
-        canvas.dispatchEvent(new WheelEvent('wheel', { bubbles: true, cancelable: true, deltaY: 240, clientX: 450, clientY: 285 }));
+        canvas.dispatchEvent(new WheelEvent('wheel', { bubbles: true, cancelable: true, deltaY: -240, clientX: 450, clientY: 285 }));
     });
     expect(div.querySelector('button[aria-label="Return to live view"]')).not.toBeNull();
 
@@ -126,4 +127,27 @@ it('wheel zoom and two-finger pinch zoom never fire cell taps', async () => {
         canvas.dispatchEvent(pointerEvent('pointerup', { pointerId: 1, clientX: 440, clientY: 285 }));
     });
     expect(tap).not.toHaveBeenCalled();
+});
+
+it('a sideways trackpad swipe pans, and a vertical wheel zooms both directions with one factor', async () => {
+    const { div, root, tap, step } = setupBoard();
+    const pan = vi.spyOn(BoardRuntime.prototype, 'panBy');
+    const zoom = vi.spyOn(BoardRuntime.prototype, 'zoomAt');
+    await act(async () => root.render(<BoardCanvas onTapCell={tap} />));
+    step(0);
+    const canvas = div.querySelector('canvas')!;
+
+    act(() => {
+        canvas.dispatchEvent(new WheelEvent('wheel', { bubbles: true, cancelable: true, deltaX: 40, deltaY: 2, clientX: 450, clientY: 285 }));
+    });
+    expect(pan).toHaveBeenCalledTimes(1);
+    expect(zoom).not.toHaveBeenCalled();
+
+    act(() => {
+        canvas.dispatchEvent(new WheelEvent('wheel', { bubbles: true, cancelable: true, deltaY: -120, shiftKey: true, clientX: 450, clientY: 285 }));
+    });
+    expect(zoom).toHaveBeenCalledTimes(1);
+    const args = zoom.mock.calls[0];
+    expect(args).toHaveLength(3);
+    expect(args[0]).toBeGreaterThan(1);
 });

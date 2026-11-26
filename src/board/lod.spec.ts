@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { testCell } from "./fixtures";
 import type { BoardViewport } from "./layout";
-import { MAX_DRAWN_CELLS, planCellLod } from "./lod";
+import { labelFontPx, MAX_DRAWN_CELLS, planCellLod } from "./lod";
 
 const baseViewport: BoardViewport = {
   width: 375,
@@ -102,5 +102,19 @@ describe("planCellLod", () => {
     expect(plan.merged).toBe(false);
     expect(plan.textMode).toBe("micro");
     expect(plan.tiles.length).toBeLessThanOrEqual(MAX_DRAWN_CELLS);
+  });
+});
+
+describe("labelFontPx", () => {
+  it("grows full labels with the box: 17 px at the 84 px default, capped at 20, at least 11", () => {
+    expect(labelFontPx("full", 84)).toBe(17);
+    expect(labelFontPx("full", 168)).toBe(20);
+    expect(labelFontPx("full", 40)).toBe(11);
+  });
+
+  it("keeps compact and micro label sizes", () => {
+    expect(labelFontPx("compact", 28)).toBe(9.5);
+    expect(labelFontPx("compact", 30)).toBe(10);
+    expect(labelFontPx("micro", 16)).toBe(8.5);
   });
 });

@@ -3,7 +3,7 @@ import { bounds, drawBoard, SETTLEMENT_DURATION_MS, type BoardScene, type BoardT
 import { createChartClock } from './clock';
 import { createSmoothValue } from './smooth';
 import { cellRect, hitTestCell, isLocked, plotHeight, plotWidth, priceToY, timeToX, xToTime, type BoardViewport } from './layout';
-import { boardScale, EXTENDED_HORIZON_THRESHOLD_MS } from './boardScale';
+import { boardScale } from './boardScale';
 import { PHONE_BREAKPOINT } from '../shell/useIsPhone';
 import { createDrawnSeries, decimateVisibleLine } from './drawnSeries';
 import { visibleCells } from './retainedCells';
@@ -39,7 +39,6 @@ export class BoardRuntime {
     private dirty = true;
     private previous?: Parameters<typeof shouldRedraw>[0];
     private lastTicker = '';
-    private extendedHorizon = false;
     private lastCells?: CellData[];
     private lastStacks?: State['stacks'];
     private lastTs = 0;
@@ -115,11 +114,10 @@ export class BoardRuntime {
         this.emitHud();
     }
 
-    zoomAt(factorTime: number, factorPrice: number, canvasX: number, canvasY: number): void {
+    zoomAt(factor: number, canvasX: number, canvasY: number): void {
         if (!this.lastMetrics) return;
         this.camera.zoomAt(
-            factorTime,
-            factorPrice,
+            factor,
             canvasX,
             canvasY,
             this.lastMetrics,
@@ -218,7 +216,6 @@ export class BoardRuntime {
             this.drawn.reset();
             this.center.reset();
             this.camera.reset();
-            this.extendedHorizon = false;
             this.lastTs = 0;
             this.lastTicker = state.ticker;
             this.dirty = true;
@@ -238,32 +235,36 @@ export class BoardRuntime {
             if (p.price < minSeriesPrice) minSeriesPrice = p.price;
             if (p.price > maxSeriesPrice) maxSeriesPrice = p.price;
         }
+        // Quoted future boxes set how far zooming out may go (every priced box fits, about 200 at most).
+        const quotedRowKeys = new Set<string>();
+        const quotedColKeys = new Set<number>();
         let maxQuotedEndTs = now;
         for (const c of state.cells) {
             if (c.original.ticker !== state.ticker) continue;
             if (c.timeWindowEnd > maxQuotedEndTs) maxQuotedEndTs = c.timeWindowEnd;
+            if (c.timeWindowEnd > now) {
+                quotedRowKeys.add(String(c.original.lowerPrice));
+                quotedColKeys.add(c.timeWindowStart);
+            }
             const lo = Number(c.original.lowerPrice);
             const hi = Number(c.original.upperPrice);
             if (Number.isFinite(lo) && lo < minSeriesPrice) minSeriesPrice = lo;
             if (Number.isFinite(hi) && hi > maxSeriesPrice) maxSeriesPrice = hi;
-        }
-        if (maxQuotedEndTs - now > EXTENDED_HORIZON_THRESHOLD_MS) {
-            this.extendedHorizon = true;
         }
 
         const scale = boardScale(
             this.size.width,
             this.size.height,
             window.innerWidth < PHONE_BREAKPOINT,
-            this.extendedHorizon ? 120_000 : 0,
         );
         const metrics: CameraMetrics = {
             width: this.size.width,
             height: this.size.height,
             nowFraction: scale.nowFraction,
-            visibleRows: scale.visibleRows,
             priceStep: state.modePriceStep,
-            defaultAheadMs: scale.defaultAheadMs,
+            cellPx: scale.cellPx,
+            quotedRows: quotedRowKeys.size,
+            quotedCols: quotedColKeys.size,
             rightGutter: scale.rightGutter,
             bottomGutter: scale.bottomGutter,
             minSeriesPrice: Number.isFinite(minSeriesPrice) ? minSeriesPrice : undefined,

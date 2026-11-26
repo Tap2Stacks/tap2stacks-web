@@ -6,9 +6,9 @@ import {
   clampZoom,
   FUTURE_LIMIT_MS,
   HISTORY_LIMIT_MS,
-  MAX_PRICE_ZOOM,
-  MAX_TIME_ZOOM,
-  MIN_PRICE_ZOOM,
+  MAX_CELL_ZOOM,
+  MIN_CELL_PX,
+  minCellPx,
   priceBounds,
   rubberBand,
   timeOffsetBounds,
@@ -16,56 +16,108 @@ import {
 } from "./camera";
 import { priceToY, timeToX, xToTime, yToPrice } from "./layout";
 
+// A 100 px default box keeps 50 ms per px, so the pan and edge tests read as before.
 const desktopMetrics: CameraMetrics = {
   width: 1000,
   height: 600,
   nowFraction: 0.3,
-  visibleRows: 20,
   priceStep: 0.03,
+  cellPx: 100,
+  quotedRows: 20,
+  quotedCols: 6,
 };
 
-const phoneMetrics: CameraMetrics = {
+// The real desktop layout: 1280x720, gutters 58/20, NOW at 38%, 84 px boxes, 20 rows x 6 columns quoted.
+const liveDesktop: CameraMetrics = {
+  width: 1280,
+  height: 720,
+  nowFraction: 0.38,
+  priceStep: 0.03,
+  cellPx: 84,
+  quotedRows: 20,
+  quotedCols: 6,
+  rightGutter: 58,
+  bottomGutter: 20,
+};
+
+const smallPhone: CameraMetrics = {
   width: 375,
   height: 500,
-  nowFraction: 0.2,
-  visibleRows: 13,
+  nowFraction: 0.35,
   priceStep: 0.03,
+  cellPx: 60,
+  quotedRows: 20,
+  quotedCols: 6,
+  rightGutter: 50,
+  bottomGutter: 20,
 };
 
-describe("camera zoom, pan transforms and clamps", () => {
-  it("computes base scales matching 35 s default horizon and 7 min full zoom-out", () => {
-    const d = baseScaleFor(desktopMetrics);
-    expect(d.baseMsPerPx).toBeCloseTo(50, 6); // 35000 / 700
-    expect(d.basePricePerPx).toBeCloseTo(0.001, 6); // 0.60 / 600
-    // At minTimeZoom, full width spans 5 min back + 2 min ahead = 420 s
-    const fullMsPerPx = d.baseMsPerPx / d.minTimeZoom;
-    expect(fullMsPerPx * desktopMetrics.width).toBeCloseTo(
-      HISTORY_LIMIT_MS + FUTURE_LIMIT_MS,
-      3,
-    );
+function boxSide(v: { msPerPx: number }): number {
+  return 5000 / v.msPerPx;
+}
 
-    const p = baseScaleFor(phoneMetrics);
-    const phoneFullMsPerPx = p.baseMsPerPx / p.minTimeZoom;
-    expect(phoneFullMsPerPx * phoneMetrics.width).toBeCloseTo(
-      HISTORY_LIMIT_MS + FUTURE_LIMIT_MS,
-      3,
-    );
+describe("camera zoom, pan transforms and clamps", () => {
+  it("keeps boxes square at the default size", () => {
+    const cam = new BoardCamera();
+    const { viewport } = cam.step(0, 16, 10_000, 155, liveDesktop, false);
+    expect(viewport.msPerPx * 84).toBeCloseTo(5000, 6);
+    expect(viewport.pricePerPx * 84).toBeCloseTo(0.03, 9);
   });
 
-  it("clamps timeZoom and priceZoom strictly within bounds", () => {
-    const { minTimeZoom } = baseScaleFor(desktopMetrics);
-    expect(clampZoom(0.01, 0.01, minTimeZoom)).toEqual({
-      timeZoom: minTimeZoom,
-      priceZoom: MIN_PRICE_ZOOM,
-    });
-    expect(clampZoom(99, 99, minTimeZoom)).toEqual({
-      timeZoom: MAX_TIME_ZOOM,
-      priceZoom: MAX_PRICE_ZOOM,
-    });
-    expect(clampZoom(Number.NaN, Number.POSITIVE_INFINITY, minTimeZoom)).toEqual({
-      timeZoom: 1,
-      priceZoom: 1,
-    });
+  it("keeps boxes square after zooming, for any price step", () => {
+    for (const priceStep of [0.01, 0.03, 0.05]) {
+      const m = { ...liveDesktop, priceStep };
+      const cam = new BoardCamera();
+      for (const f of [0.6, 1.7]) {
+        cam.zoomAt(f, 600, 300, m, 10_000, 155);
+        const { viewport } = cam.step(0, 16, 10_000, 155, m, false);
+        expect(boxSide(viewport)).toBeCloseTo(priceStep / viewport.pricePerPx, 6);
+      }
+    }
+  });
+
+  it("stops zooming in at twice the default box", () => {
+    const cam = new BoardCamera();
+    for (let i = 0; i < 12; i++) cam.zoomAt(1.35, 600, 300, liveDesktop, 10_000, 155);
+    const { viewport } = cam.step(0, 16, 10_000, 155, liveDesktop, false);
+    expect(boxSide(viewport)).toBeCloseTo(84 * MAX_CELL_ZOOM, 6);
+  });
+
+  it("stops zooming out when every priced box fits, at about 200 boxes, and never below 28 px", () => {
+    expect(minCellPx(liveDesktop)).toBeCloseTo(35, 6);
+    expect(minCellPx({ ...liveDesktop, quotedCols: 10 })).toBeCloseTo(35, 6);
+    const wide = { ...liveDesktop, quotedCols: 24 };
+    const s = minCellPx(wide);
+    expect(s).toBeCloseTo(51.5, 0);
+    const inView = Math.min(20, 700 / s) * Math.min(24, (1222 * 0.62) / s);
+    expect(inView).toBeLessThanOrEqual(200.001);
+    expect(minCellPx(smallPhone)).toBe(MIN_CELL_PX);
+    expect(minCellPx({ ...liveDesktop, quotedRows: 0 })).toBe(MIN_CELL_PX);
+    expect(minCellPx({ ...liveDesktop, quotedCols: 0 })).toBe(MIN_CELL_PX);
+
+    const cam = new BoardCamera();
+    for (let i = 0; i < 20; i++) cam.zoomAt(0.75, 600, 300, liveDesktop, 10_000, 155);
+    const { viewport } = cam.step(0, 16, 10_000, 155, liveDesktop, false);
+    expect(boxSide(viewport)).toBeCloseTo(35, 6);
+  });
+
+  it("re-clamps the zoom when the layout or the quoted grid changes", () => {
+    const cam = new BoardCamera();
+    for (let i = 0; i < 20; i++) cam.zoomAt(0.75, 600, 300, liveDesktop, 10_000, 155);
+    const taller = { ...liveDesktop, height: 1400 };
+    const afterResize = cam.step(16, 16, 10_000, 155, taller, false);
+    expect(boxSide(afterResize.viewport)).toBeCloseTo(minCellPx(taller), 6);
+    const moreCols = { ...liveDesktop, quotedCols: 24 };
+    const afterQuotes = cam.step(32, 16, 10_000, 155, moreCols, false);
+    expect(boxSide(afterQuotes.viewport)).toBeGreaterThanOrEqual(minCellPx(moreCols) - 1e-6);
+  });
+
+  it("clamps one zoom value within its bounds", () => {
+    expect(clampZoom(0.01, 0.4)).toBe(0.4);
+    expect(clampZoom(99, 0.4)).toBe(MAX_CELL_ZOOM);
+    expect(clampZoom(Number.NaN, 0.4)).toBe(1);
+    expect(clampZoom(Number.POSITIVE_INFINITY, 0.4)).toBe(1);
+    expect(baseScaleFor(smallPhone).minZoom).toBeCloseTo(MIN_CELL_PX / 60, 9);
   });
 
   it("clamps time pan offset so left edge never passes -5 min and right edge never passes +2 min", () => {
@@ -173,7 +225,7 @@ describe("camera zoom, pan transforms and clamps", () => {
     const initial = cam.step(0, 16, 400_000, 155, desktopMetrics, false);
 
     // Zooming in live mode keeps auto-follow active
-    cam.zoomAt(0.5, 0.5, 600, 200, desktopMetrics, 400_000, 155);
+    cam.zoomAt(0.5, 600, 200, desktopMetrics, 400_000, 155);
     const zoomedLive = cam.step(16, 16, 400_000, 155, desktopMetrics, false);
     expect(zoomedLive.isLive).toBe(true);
     expect(zoomedLive.isZoomed).toBe(true);
@@ -188,7 +240,7 @@ describe("camera zoom, pan transforms and clamps", () => {
     const tsUnderCursor = xToTime(before.viewport, 650);
     const priceUnderCursor = yToPrice(before.viewport, 180);
 
-    cam.zoomAt(1.5, 1.5, 650, 180, desktopMetrics, 400_000, 155);
+    cam.zoomAt(1.5, 650, 180, desktopMetrics, 400_000, 155);
     const after = cam.step(48, 16, 400_000, 155, desktopMetrics, true);
     expect(xToTime(after.viewport, 650)).toBeCloseTo(tsUnderCursor, 1);
     expect(yToPrice(after.viewport, 180)).toBeCloseTo(priceUnderCursor, 5);
@@ -200,7 +252,7 @@ describe("camera zoom, pan transforms and clamps", () => {
     cam.beginDrag(400_000, 155);
     cam.dragBy(300, -80, desktopMetrics, 400_000, 155);
     cam.endDrag(0, 0, desktopMetrics, 400_000, 155, true);
-    cam.zoomAt(0.5, 0.6, 500, 300, desktopMetrics, 400_000, 155);
+    cam.zoomAt(0.5, 500, 300, desktopMetrics, 400_000, 155);
 
     cam.snapToLive(100, 400_000, 155, false);
     const mid = cam.step(200, 100, 400_100, 155, desktopMetrics, false);
@@ -215,21 +267,20 @@ describe("camera zoom, pan transforms and clamps", () => {
     expect(priceToY(done.viewport, 155)).toBeCloseTo(300, 4);
   });
 
-  it("respects rightGutter and defaultAheadMs so 375 px phone shows 32 s history and 32 s future before the gutter", () => {
+  it("places NOW at 35% of a 375 px phone plot with 60 px boxes before the gutter", () => {
     const cam = new BoardCamera();
-    const phoneWithGutter: CameraMetrics = {
-      width: 375,
-      height: 500,
-      nowFraction: 0.5,
-      visibleRows: 13,
-      priceStep: 0.03,
-      defaultAheadMs: 32_000,
-      rightGutter: 50,
-    };
-    const { viewport } = cam.step(0, 16, 400_000, 155, phoneWithGutter, false);
+    const { viewport } = cam.step(0, 16, 400_000, 155, smallPhone, false);
     expect(viewport.rightGutter).toBe(50);
-    expect(timeToX(viewport, 400_000)).toBeCloseTo(162.5, 4);
-    expect(timeToX(viewport, 400_000 - 32_000)).toBeCloseTo(0, 4);
-    expect(timeToX(viewport, 400_000 + 32_000)).toBeCloseTo(325, 4);
+    expect(timeToX(viewport, 400_000)).toBeCloseTo(325 * 0.35, 4);
+    expect(timeToX(viewport, 400_000 + 5_000) - timeToX(viewport, 400_000)).toBeCloseTo(60, 4);
+  });
+
+  it("stays live while zooming in follow mode", () => {
+    const cam = new BoardCamera();
+    cam.zoomAt(0.7, 900, 100, liveDesktop, 10_000, 155);
+    const r = cam.step(0, 16, 10_000, 155, liveDesktop, false);
+    expect(r.isLive).toBe(true);
+    expect(r.isZoomed).toBe(true);
+    expect(cam.isFollowing).toBe(true);
   });
 });

@@ -23,6 +23,7 @@ import {
 } from './cellSprites';
 import {
     formatLodMultiplier,
+    labelFontPx,
     planCellLod,
     type CellTextMode,
     type RenderTile,
@@ -128,14 +129,7 @@ function drawTile(
 
     if (canShowText) {
         const textEdgeFade = clippedRight ? smoothstep(0.85, 0.98, visFracX) : 1;
-        const fontSize =
-            textMode === 'micro'
-                ? 8.5
-                : textMode === 'compact'
-                    ? (r.w < 29 ? 9.5 : 10)
-                    : r.w < 44
-                        ? 11
-                        : 12;
+        const fontSize = labelFontPx(textMode, r.w);
         const weight = tile.locked ? 400 : fade.fontWeight;
         ctx.globalAlpha = (tile.locked ? 0.3 : fade.textAlpha) * textEdgeFade;
         ctx.fillStyle = bp.ink;

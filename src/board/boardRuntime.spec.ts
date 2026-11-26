@@ -24,9 +24,9 @@ it('caps DPR, keeps all quoted columns visible before right gutter, pauses hidde
         expect(el.width).toBe(2000);
         const vp = runtime.viewport!;
         expect(vp.rightGutter).toBeGreaterThan(0);
-        expect(timeToX(vp, 45000)).toBeCloseTo(plotWidth(vp));
-        // Default zoom exposes 30-40 s of history to the left of NOW
-        expect(timeToX(vp, 10000 - 35000)).toBeCloseTo(0);
+        // Square 84 px boxes: one 5 s column is 84 px wide, NOW sits at 38% of the plot
+        expect(timeToX(vp, 15000) - timeToX(vp, 10000)).toBeCloseTo(84, 6);
+        expect(timeToX(vp, 10000)).toBeCloseTo(plotWidth(vp) * 0.38, 6);
         hidden = true;
         document.dispatchEvent(new Event('visibilitychange'));
         const count = vi.mocked(requestAnimationFrame).mock.calls.length;
@@ -59,7 +59,6 @@ it('keeps historical x coordinates continuous as the six-column quote horizon ro
         useGameStore.setState({ cells: [testCell({ timeWindowEnd: 50000 })] });
         frame(1);
         expect(Math.abs(timeToX(runtime.viewport!, 5000) - before)).toBeLessThan(.1);
-        expect(timeToX(runtime.viewport!, 50000)).toBeCloseTo(plotWidth(runtime.viewport!));
     } finally {
         runtime.dispose();
     }
@@ -95,7 +94,7 @@ it('cellCenter returns client coordinates only for visible cells of the current 
     }
 });
 
-it('switches cleanly between 24-window NVDA (~60 s default future) and 6-window TSLA (~35 s default future)', () => {
+it('keeps the same square 60 px phone boxes when switching between a 24-window and a 6-window ticker', () => {
     let frame: FrameRequestCallback = () => { };
     vi.stubGlobal('requestAnimationFrame', (cb: FrameRequestCallback) => { frame = cb; return 1; });
     vi.stubGlobal('cancelAnimationFrame', () => { });
@@ -131,14 +130,14 @@ it('switches cleanly between 24-window NVDA (~60 s default future) and 6-window 
     try {
         frame(0);
         const nvdaVp = runtime.viewport!;
-        // NVDA with 24 windows shows ~60 s ahead at 375 px
-        expect(timeToX(nvdaVp, 10000 + 60_000)).toBeCloseTo(plotWidth(nvdaVp), 1);
+        expect(timeToX(nvdaVp, nvdaVp.nowMs + 5000) - timeToX(nvdaVp, nvdaVp.nowMs)).toBeCloseTo(60, 6);
+        expect(timeToX(nvdaVp, nvdaVp.nowMs)).toBeCloseTo(plotWidth(nvdaVp) * 0.35, 6);
 
-        // Switching to TSLA (6 windows) resets horizon to 32 s on phone
         useGameStore.setState({ ticker: 'TSLA', currentPrice: 250.04 });
         frame(16);
         const tslaVp = runtime.viewport!;
-        expect(timeToX(tslaVp, tslaVp.nowMs + 32_000)).toBeCloseTo(plotWidth(tslaVp), 1);
+        expect(timeToX(tslaVp, tslaVp.nowMs + 5000) - timeToX(tslaVp, tslaVp.nowMs)).toBeCloseTo(60, 6);
+        expect(timeToX(tslaVp, tslaVp.nowMs)).toBeCloseTo(plotWidth(tslaVp) * 0.35, 6);
     } finally {
         runtime.dispose();
     }

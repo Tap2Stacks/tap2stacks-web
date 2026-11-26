@@ -1,5 +1,6 @@
 import { afterEach, expect, it, vi } from 'vitest';
 import { BoardRuntime } from './boardRuntime';
+import * as drawModule from './draw';
 import { plotWidth, priceToY, timeToX } from './layout';
 import { useGameStore } from '../store';
 import { recordingContext } from '../test/recordingContext';
@@ -140,5 +141,83 @@ it('keeps the same square 60 px phone boxes when switching between a 24-window a
         expect(timeToX(tslaVp, tslaVp.nowMs)).toBeCloseTo(plotWidth(tslaVp) * 0.35, 6);
     } finally {
         runtime.dispose();
+    }
+});
+
+it('setHover fades hover alpha in over ~120 ms on open cells, clears on locked/empty/ticker-switch, and snaps under reduced motion', () => {
+    let frame: FrameRequestCallback = () => { };
+    let wall = 10000;
+    let reducedMatches = false;
+    vi.stubGlobal('requestAnimationFrame', (cb: FrameRequestCallback) => { frame = cb; return 1; });
+    vi.stubGlobal('cancelAnimationFrame', () => { });
+    vi.stubGlobal('ResizeObserver', class { observe() { } disconnect() { } });
+    vi.stubGlobal('matchMedia', () => ({ matches: reducedMatches }) as MediaQueryList);
+    vi.spyOn(document, 'hidden', 'get').mockReturnValue(false);
+    vi.spyOn(Date, 'now').mockImplementation(() => wall);
+
+    const drawSpy = vi.spyOn(drawModule, 'drawBoard');
+    const el = document.createElement('canvas');
+    vi.spyOn(el, 'getBoundingClientRect').mockReturnValue({ left: 0, top: 0, width: 1000, height: 600 } as DOMRect);
+    const openCell = testCell({ id: 'open-1', timeWindowStart: 15000, timeWindowEnd: 20000 });
+    const lockedCell = testCell({ id: 'locked-1', timeWindowStart: 11000, timeWindowEnd: 16000 });
+    useGameStore.setState({ ticker: 'NVDA', currentPrice: 155, cells: [openCell, lockedCell], stacks: {}, serverTimeOffset: 0 });
+
+    const runtime = new BoardRuntime(el, recordingContext().ctx, () => undefined);
+    try {
+        frame(0);
+        const vp = runtime.viewport!;
+        const openX = (timeToX(vp, 15000) + timeToX(vp, 20000)) / 2;
+        const openY = (priceToY(vp, 155.03) + priceToY(vp, 155.00)) / 2;
+        runtime.setHover(openX, openY);
+        for (let t = 16; t <= 200; t += 16) {
+            frame(t);
+        }
+        const hoveredScene = drawSpy.mock.calls.at(-1)?.[1];
+        expect(hoveredScene?.hover?.cellId).toBe('open-1');
+        expect(hoveredScene?.hover?.alpha).toBeGreaterThanOrEqual(0.95);
+
+        runtime.clearHover();
+        for (let t = 216; t <= 600; t += 16) {
+            frame(t);
+        }
+        expect(drawSpy.mock.calls.at(-1)?.[1].hover).toBeUndefined();
+
+        runtime.setHover(openX, openY);
+        frame(620);
+        expect(drawSpy.mock.calls.at(-1)?.[1].hover?.cellId).toBe('open-1');
+        const lockedX = timeToX(vp, 11500);
+        runtime.setHover(lockedX, openY);
+        for (let t = 636; t <= 1000; t += 16) {
+            frame(t);
+        }
+        expect(drawSpy.mock.calls.at(-1)?.[1].hover).toBeUndefined();
+
+        runtime.setHover(openX, openY);
+        frame(1020);
+        expect(drawSpy.mock.calls.at(-1)?.[1].hover?.cellId).toBe('open-1');
+        useGameStore.setState({ ticker: 'TSLA' });
+        frame(1036);
+        expect(drawSpy.mock.calls.at(-1)?.[1].hover).toBeUndefined();
+    } finally {
+        runtime.dispose();
+    }
+
+    reducedMatches = true;
+    drawSpy.mockClear();
+    useGameStore.setState({ ticker: 'NVDA', currentPrice: 155, cells: [openCell], stacks: {}, serverTimeOffset: 0 });
+    const reducedRuntime = new BoardRuntime(el, recordingContext().ctx, () => undefined);
+    try {
+        frame(0);
+        const vp = reducedRuntime.viewport!;
+        const openX = (timeToX(vp, 15000) + timeToX(vp, 20000)) / 2;
+        const openY = (priceToY(vp, 155.03) + priceToY(vp, 155.00)) / 2;
+        reducedRuntime.setHover(openX, openY);
+        frame(16);
+        expect(drawSpy.mock.calls.at(-1)?.[1].hover).toEqual({ cellId: 'open-1', alpha: 1 });
+        reducedRuntime.clearHover();
+        frame(32);
+        expect(drawSpy.mock.calls.at(-1)?.[1].hover).toBeUndefined();
+    } finally {
+        reducedRuntime.dispose();
     }
 });

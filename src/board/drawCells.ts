@@ -128,3 +128,28 @@ export function drawCellLabels(
 
   ctx.restore();
 }
+
+/**
+ * Renders a soft rounded tile fill for a player's bet or the hovered cell.
+ */
+export function drawCellTile(
+  ctx: CanvasRenderingContext2D,
+  r: { x: number; y: number; w: number; h: number },
+  kind: 'bet' | 'hover',
+  alpha: number,
+  bp: BoardPalette,
+): void {
+  const clamped = Math.max(0, Math.min(1, alpha));
+  if (clamped <= 0 || r.w <= 0 || r.h <= 0) return;
+  const inset = Math.min(1.5, r.w * 0.05, r.h * 0.05);
+  const w = r.w - inset * 2;
+  const h = r.h - inset * 2;
+  if (w <= 0 || h <= 0) return;
+  const radius = Math.min(6, w * 0.16, h * 0.16);
+  ctx.save();
+  ctx.globalAlpha = (kind === 'bet' ? 0.24 : 0.08) * clamped;
+  ctx.fillStyle = kind === 'bet' ? bp.highlight : bp.ink;
+  traceRoundedRect(ctx, r.x + inset, r.y + inset, w, h, radius);
+  ctx.fill();
+  ctx.restore();
+}

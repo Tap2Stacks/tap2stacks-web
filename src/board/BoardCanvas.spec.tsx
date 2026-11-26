@@ -14,9 +14,12 @@ vi.mock('../api/prices', () => ({ fetchRecentPrices: vi.fn(async () => ({ prevDa
 let cleanup = () => { };
 afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 
-function pointerEvent(type: string, opts: { clientX: number; clientY: number; pointerId?: number }) {
-    const ev = new MouseEvent(type, { bubbles: true, clientX: opts.clientX, clientY: opts.clientY });
+function pointerEvent(type: string, opts: { clientX: number; clientY: number; pointerId?: number; pointerType?: string; buttons?: number }) {
+    const ev = new MouseEvent(type, { bubbles: true, clientX: opts.clientX, clientY: opts.clientY, buttons: opts.buttons ?? 0 });
     Object.defineProperty(ev, 'pointerId', { value: opts.pointerId ?? 1 });
+    if (opts.pointerType !== undefined) {
+        Object.defineProperty(ev, 'pointerType', { value: opts.pointerType });
+    }
     return ev;
 }
 
@@ -165,4 +168,45 @@ it('the return-to-default button is icon only and appears after zooming', async 
     expect(btn).not.toBeNull();
     expect(btn.textContent?.trim()).toBe('');
     expect(btn.querySelector('svg')).not.toBeNull();
+});
+
+it('wires mouse hover, pointerleave, touch highlight, and drag clearHover on BoardRuntime', async () => {
+    const { div, root, tap, step } = setupBoard();
+    const setHover = vi.spyOn(BoardRuntime.prototype, 'setHover');
+    const clearHover = vi.spyOn(BoardRuntime.prototype, 'clearHover');
+    await act(async () => root.render(<BoardCanvas onTapCell={tap} />));
+    step(0);
+    const canvas = div.querySelector('canvas')!;
+
+    // Mouse pointermove without buttons calls setHover
+    act(() => {
+        canvas.dispatchEvent(pointerEvent('pointermove', { clientX: 484, clientY: 248, pointerType: 'mouse', buttons: 0 }));
+    });
+    expect(setHover).toHaveBeenCalledWith(484, 248);
+
+    // pointerleave (synthesized from pointerout by React) calls clearHover
+    act(() => {
+        canvas.dispatchEvent(pointerEvent('pointerout', { clientX: 484, clientY: 248, pointerType: 'mouse' }));
+    });
+    expect(clearHover).toHaveBeenCalledTimes(1);
+
+    // Touch pointerdown calls setHover, pointerup calls clearHover
+    setHover.mockClear();
+    clearHover.mockClear();
+    act(() => {
+        canvas.dispatchEvent(pointerEvent('pointerdown', { clientX: 484, clientY: 248, pointerType: 'touch' }));
+    });
+    expect(setHover).toHaveBeenCalledWith(484, 248);
+    act(() => {
+        canvas.dispatchEvent(pointerEvent('pointerup', { clientX: 484, clientY: 248, pointerType: 'touch' }));
+    });
+    expect(clearHover).toHaveBeenCalledTimes(1);
+
+    // Drag clears hover
+    clearHover.mockClear();
+    act(() => {
+        canvas.dispatchEvent(pointerEvent('pointerdown', { clientX: 450, clientY: 285, pointerType: 'mouse', buttons: 1 }));
+        canvas.dispatchEvent(pointerEvent('pointermove', { clientX: 520, clientY: 285, pointerType: 'mouse', buttons: 1 }));
+    });
+    expect(clearHover).toHaveBeenCalled();
 });

@@ -1,7 +1,7 @@
 import type { CellData } from '../store';
 import { THEME } from '../ui/theme';
 import { monotoneSegments, type Pt } from './curve';
-import { cellRect, plotHeight, plotWidth, priceToY, timeToX, xToTime, type BoardViewport } from './layout';
+import { cellRect, isLocked, plotHeight, plotWidth, priceToY, timeToX, xToTime, type BoardViewport } from './layout';
 import { formatBoardPrice } from './priceFormat';
 import { stackTotals } from './stacks';
 import type { CoinStack } from './types';
@@ -11,7 +11,7 @@ import {
     type BoardPalette,
     type BoardThemeMode,
 } from './cellColor';
-import { drawCellGrid, drawCellLabels, traceRoundedRect } from './drawCells';
+import { drawCellGrid, drawCellLabels, drawCellTile, traceRoundedRect } from './drawCells';
 import { planCellLod } from './lod';
 
 export const SETTLEMENT_DURATION_MS = 1200;
@@ -30,6 +30,10 @@ export interface BoardScene {
     dpr?: number;
     themeMode?: BoardThemeMode;
     isFollowing?: boolean;
+    hover?: {
+        cellId: string;
+        alpha: number;
+    };
     flash?: {
         cellId: string;
         untilMs: number;
@@ -339,6 +343,36 @@ function drawLiveAxisMarker(
     ctx.restore();
 }
 
+function stackSettlementFade(stack: CoinStack | undefined, nowMs: number): number {
+    if (!stack) return 0;
+    const coins = stack.coins.filter(c => c.status !== 'rejected');
+    if (!coins.length) return 0;
+    const terminal = coins.every(c => ['lost', 'void', 'won'].includes(c.status));
+    if (!terminal) return 1;
+    const terminalAt = Math.max(...coins.map(c => c.updatedAt ?? c.placedAt));
+    return Math.max(0, 1 - Math.max(0, nowMs - terminalAt) / SETTLEMENT_DURATION_MS);
+}
+
+function drawHoverTile(ctx: CanvasRenderingContext2D, scene: BoardScene, animNow: number, bp: BoardPalette): void {
+    const hover = scene.hover;
+    if (!hover || hover.alpha <= 0) return;
+    const cell = scene.cells.find(c => c.id === hover.cellId);
+    if (!cell || cell.status !== 'active' || isLocked(cell.timeWindowStart, scene.viewport.nowMs)) return;
+    if (stackSettlementFade(scene.stacks[cell.id], animNow) > 0) return;
+    drawCellTile(ctx, cellRect(scene.viewport, bounds(cell)), 'hover', hover.alpha, bp);
+}
+
+function drawStacksAndBets(ctx: CanvasRenderingContext2D, scene: BoardScene, animNow: number, bp: BoardPalette): void {
+    for (const cell of scene.cells) {
+        const stack = scene.stacks[cell.id];
+        const fade = stackSettlementFade(stack, animNow);
+        if (!stack || fade <= 0) continue;
+        const r = cellRect(scene.viewport, bounds(cell));
+        drawCellTile(ctx, r, 'bet', fade, bp);
+        drawStack(ctx, stack, r, animNow, scene.reducedMotion, bp);
+    }
+}
+
 export function drawBoard(ctx: CanvasRenderingContext2D, scene: BoardScene): void {
     const { viewport: v } = scene;
     const mode: BoardThemeMode = scene.themeMode ?? 'light';
@@ -386,17 +420,14 @@ export function drawBoard(ctx: CanvasRenderingContext2D, scene: BoardScene): voi
         ctx.restore();
     }
 
-    // 1. Render open cell multiplier labels only (no filled open tiles)
+    // 1. Soft hover tile (only open, unbet, unlocked cell) and multiplier labels
+    const animNow = scene.animationNowMs ?? v.nowMs;
+    drawHoverTile(ctx, scene, animNow, bp);
     const lod = planCellLod(scene.cells, v, step);
     drawCellLabels(ctx, lod, v, mode, bp);
 
-    // 2. Render coin stacks on both future and past cells (past area has no odds, only line + stacks)
-    for (const cell of scene.cells) {
-        const stack = scene.stacks[cell.id];
-        if (stack) {
-            drawStack(ctx, stack, cellRect(v, bounds(cell)), scene.animationNowMs ?? v.nowMs, scene.reducedMotion, bp);
-        }
-    }
+    // 2. Render player bet tiles and coin stacks on both future and past cells
+    drawStacksAndBets(ctx, scene, animNow, bp);
 
     drawNotOpenYetZone(ctx, v, maxQuotedEndTs, bp);
 
@@ -420,6 +451,7 @@ export function drawBoard(ctx: CanvasRenderingContext2D, scene: BoardScene): voi
                 ctx.stroke();
                 ctx.restore();
             }
+            ctx.globalAlpha = 1;
             ctx.beginPath();
             ctx.arc(liveX, rawY, 4 + (scene.reducedMotion ? 0 : Math.sin(v.nowMs / 250) * .6), 0, Math.PI * 2);
             ctx.fillStyle = bp.ink;
@@ -469,7 +501,7 @@ export function drawStack(ctx: CanvasRenderingContext2D, stack: CoinStack, r: {
     const terminal = coins.every(c => ['lost', 'void', 'won'].includes(c.status));
     const terminalAt = Math.max(...coins.map(c => c.updatedAt ?? c.placedAt));
     const terminalAge = Math.max(0, nowMs - terminalAt);
-    const fade = terminal ? Math.max(0, 1 - terminalAge / SETTLEMENT_DURATION_MS) : 1;
+    const fade = stackSettlementFade(stack, nowMs);
     if (fade === 0)
         return;
     ctx.save();

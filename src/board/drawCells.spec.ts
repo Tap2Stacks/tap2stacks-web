@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { recordingContext } from "../test/recordingContext";
+import { THEME } from "../ui/theme";
 import { boardPalette } from "./cellColor";
-import { drawCellGrid, drawCellLabels } from "./drawCells";
+import { drawBoard } from "./draw";
+import { drawCellGrid, drawCellLabels, drawCellTile } from "./drawCells";
 import { testCell } from "./fixtures";
 import type { BoardViewport } from "./layout";
 import { planCellLod } from "./lod";
@@ -56,5 +58,78 @@ describe("drawCells", () => {
       (c) => c.name === "fillRect" && Number(c.args[2]) === 1000 && Number(c.args[3]) < 2,
     );
     expect(horizontals).toHaveLength(2);
+  });
+
+  it("drawCellTile draws a rounded filled tile with soft coin gold for bets and low-alpha ink for hover", () => {
+    const bp = boardPalette("light");
+    const bet = recordingContext();
+    drawCellTile(bet.ctx, { x: 100, y: 100, w: 84, h: 84 }, "bet", 1, bp);
+    const betFill = bet.calls.find((c) => c.name === "fill");
+    expect(betFill).toBeDefined();
+    expect(betFill!.fill).toBe(THEME.highlight);
+    expect(betFill!.alpha).toBeGreaterThan(0);
+    expect(betFill!.alpha).toBeLessThan(0.5);
+
+    const hover = recordingContext();
+    drawCellTile(hover.ctx, { x: 100, y: 100, w: 84, h: 84 }, "hover", 0.5, bp);
+    const hoverFill = hover.calls.find((c) => c.name === "fill");
+    expect(hoverFill).toBeDefined();
+    expect(hoverFill!.fill).toBe(bp.ink);
+    expect(hoverFill!.alpha).toBeGreaterThan(0);
+    expect(hoverFill!.alpha).toBeLessThan(0.2);
+  });
+
+  it("drawBoard draws a bet tile under every cell that has a stack before the stack, and ignores hover on locked/past/bet cells", () => {
+    const openCell = testCell({ id: "open-bet", timeWindowStart: 15_000, timeWindowEnd: 20_000 });
+    const pastCell = testCell({ id: "past-bet", timeWindowStart: 2_000, timeWindowEnd: 7_000, status: "past" });
+    const lockedCell = testCell({ id: "locked-cell", timeWindowStart: 11_000, timeWindowEnd: 16_000 });
+    const { ctx, calls } = recordingContext();
+    drawBoard(ctx, {
+      viewport: vp,
+      cells: [openCell, pastCell, lockedCell],
+      line: [],
+      livePrice: 155,
+      hover: { cellId: lockedCell.id, alpha: 1 },
+      stacks: {
+        [openCell.id]: {
+          cellId: openCell.id,
+          ticker: "NVDA",
+          coins: [{ clientTapId: "a", amount: 5, rate: 4.1, status: "open", placedAt: 0 }],
+        },
+        [pastCell.id]: {
+          cellId: pastCell.id,
+          ticker: "NVDA",
+          coins: [{ clientTapId: "b", amount: 5, rate: 4.1, status: "open", placedAt: 0 }],
+        },
+      },
+    });
+
+    const betFills = calls
+      .map((c, idx) => ({ ...c, idx }))
+      .filter((c) => c.name === "fill" && c.fill === THEME.highlight);
+    expect(betFills).toHaveLength(2);
+    const firstEllipseIdx = calls.findIndex((c) => c.name === "ellipse");
+    expect(betFills[0].idx).toBeLessThan(firstEllipseIdx);
+    // Locked hover tile must NOT be drawn
+    expect(calls.some((c) => c.name === "fill" && c.fill === boardPalette("light").ink && c.alpha < 0.2)).toBe(false);
+
+    // Hover over a cell with a bet keeps the bet tile and does not draw a hover tile over it
+    calls.length = 0;
+    drawBoard(ctx, {
+      viewport: vp,
+      cells: [openCell],
+      line: [],
+      livePrice: 155,
+      hover: { cellId: openCell.id, alpha: 1 },
+      stacks: {
+        [openCell.id]: {
+          cellId: openCell.id,
+          ticker: "NVDA",
+          coins: [{ clientTapId: "a", amount: 5, rate: 4.1, status: "open", placedAt: 0 }],
+        },
+      },
+    });
+    expect(calls.some((c) => c.name === "fill" && c.fill === THEME.highlight)).toBe(true);
+    expect(calls.some((c) => c.name === "fill" && c.fill === boardPalette("light").ink && c.alpha < 0.2)).toBe(false);
   });
 });

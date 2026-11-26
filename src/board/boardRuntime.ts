@@ -48,6 +48,9 @@ export class BoardRuntime {
     private lastCenterPrice = 0;
     private lastMetrics: CameraMetrics | null = null;
     private lastHud: BoardHudState = { following: true, zoomed: false };
+    private hoverAlpha = createSmoothValue(40);
+    private hoverCellId: string | null = null;
+    private hoverTarget = 0;
     private reduced = window.matchMedia?.('(prefers-reduced-motion: reduce)');
     private observer: ResizeObserver;
     private el: HTMLCanvasElement;
@@ -136,6 +139,30 @@ export class BoardRuntime {
         this.emitHud();
     }
 
+    setHover(clientX: number, clientY: number): void {
+        const hit = this.hitTest(clientX, clientY);
+        if (!hit?.tappable) {
+            this.clearHover();
+            return;
+        }
+        const changed = this.hoverCellId !== hit.cell.id || this.hoverTarget !== 1;
+        if (this.hoverCellId !== hit.cell.id) {
+            this.hoverAlpha.reset();
+            if (this.lastPerf !== null) {
+                this.hoverAlpha.sample(0, this.lastPerf, true);
+            }
+        }
+        this.hoverCellId = hit.cell.id;
+        this.hoverTarget = 1;
+        if (changed) this.dirty = true;
+    }
+
+    clearHover(): void {
+        if (this.hoverTarget === 0) return;
+        this.hoverTarget = 0;
+        this.dirty = true;
+    }
+
     hitTest(clientX: number, clientY: number): { cell: CellData; tappable: boolean } | null {
         const v = this.viewport;
         if (!v) return null;
@@ -217,6 +244,9 @@ export class BoardRuntime {
             this.drawn.reset();
             this.center.reset();
             this.camera.reset();
+            this.hoverAlpha.reset();
+            this.hoverCellId = null;
+            this.hoverTarget = 0;
             this.lastTs = 0;
             this.lastTicker = state.ticker;
             this.dirty = true;
@@ -272,14 +302,31 @@ export class BoardRuntime {
         this.lastCenterPrice = middle;
         this.lastMetrics = metrics;
 
-        const stepped = this.camera.step(perf, dtMs, now, middle, metrics, !!this.reduced?.matches);
+        const snapHover = !!this.reduced?.matches;
+        let hover: BoardScene['hover'];
+        let hoverMoving = false;
+        if (this.hoverCellId) {
+            if (this.hoverAlpha.value === null && !snapHover) {
+                this.hoverAlpha.sample(0, perf, true);
+            }
+            const alpha = this.hoverAlpha.sample(this.hoverTarget, perf, snapHover);
+            if (this.hoverTarget === 0 && alpha <= 0.005) {
+                this.hoverCellId = null;
+                this.hoverAlpha.reset();
+            } else {
+                hover = { cellId: this.hoverCellId, alpha };
+                hoverMoving = Math.abs(alpha - this.hoverTarget) > 0.005;
+            }
+        }
+
+        const stepped = this.camera.step(perf, dtMs, now, middle, metrics, snapHover);
         this.viewport = stepped.viewport;
         this.emitHud();
-        return { v: stepped.viewport, live, target, points, moving: stepped.moving, isLive: stepped.isLive, maxQuotedEndTs };
+        return { v: stepped.viewport, live, target, points, moving: stepped.moving || hoverMoving, isLive: stepped.isLive, maxQuotedEndTs, hover };
     }
 
     private draw(state: State, now: number, perf: number) {
-        const { v, live, target, points, moving, isLive, maxQuotedEndTs } = this.prepare(state, now, perf);
+        const { v, live, target, points, moving, isLive, maxQuotedEndTs, hover } = this.prepare(state, now, perf);
         const next = {
             pricePx: priceToY(v, live),
             second: Math.floor(now / 1000),
@@ -308,6 +355,7 @@ export class BoardRuntime {
             dpr: this.dpr,
             themeMode: detectThemeMode(),
             isFollowing: isLive,
+            hover,
         });
         this.previous = next;
         this.dirty = false;

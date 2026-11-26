@@ -158,10 +158,14 @@ export function BoardCanvas({ onTapCell, flash }: {
             g.vy = 0;
             g.didDrag = false;
             g.wasPinch = false;
+            if (event.pointerType === 'touch') {
+                runtime.current?.setHover(event.clientX, event.clientY);
+            }
         } else if (g.pointers.size === 2) {
             if (g.didDrag) {
                 runtime.current?.endDrag(0, 0);
             }
+            runtime.current?.clearHover();
             g.wasPinch = true;
             g.didDrag = false;
             const m = twoPointerMetrics(g.pointers);
@@ -175,12 +179,18 @@ export function BoardCanvas({ onTapCell, flash }: {
 
     const handlePointerMove = (event: React.PointerEvent<HTMLCanvasElement>) => {
         const g = gesture.current;
-        if (!g.pointers.has(event.pointerId)) return;
-        g.pointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
         const board = runtime.current;
+        if (!g.pointers.has(event.pointerId)) {
+            if (board && event.pointerType !== 'touch' && event.buttons === 0) {
+                board.setHover(event.clientX, event.clientY);
+            }
+            return;
+        }
+        g.pointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
         if (!board) return;
 
         if (g.pointers.size >= 2) {
+            board.clearHover();
             const m = twoPointerMetrics(g.pointers);
             if (g.pinchDist > 8 && m.dist > 8) {
                 const scale = Math.max(0.7, Math.min(1.4, m.dist / g.pinchDist));
@@ -207,6 +217,7 @@ export function BoardCanvas({ onTapCell, flash }: {
             if (travel < DRAG_THRESHOLD_PX) return;
             g.didDrag = true;
             g.lastTap = null;
+            board.clearHover();
             board.beginDrag();
             board.dragBy(event.clientX - g.downX, event.clientY - g.downY);
         } else {
@@ -257,6 +268,10 @@ export function BoardCanvas({ onTapCell, flash }: {
         g.vy = 0;
 
         if (!board) return;
+
+        if (event.pointerType === 'touch' || wasDrag || wasPinch || cancelled) {
+            board.clearHover();
+        }
 
         if (wasDrag) {
             board.endDrag(cancelled ? 0 : vx, cancelled ? 0 : vy);
@@ -317,6 +332,7 @@ export function BoardCanvas({ onTapCell, flash }: {
                 onPointerMove={handlePointerMove}
                 onPointerUp={event => finishPointer(event, false)}
                 onPointerCancel={event => finishPointer(event, true)}
+                onPointerLeave={() => runtime.current?.clearHover()}
             />
             {showLiveButton && (
                 <button

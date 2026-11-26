@@ -71,7 +71,7 @@ it('dragging pans without firing tap, shows Live button, and Live button / doubl
     await act(async () => root.render(<BoardCanvas onTapCell={tap} />));
     step(0);
     const canvas = div.querySelector('canvas')!;
-    expect(div.querySelector('button[aria-label="Return to live view"]')).toBeNull();
+    expect(div.querySelector('button[aria-label="Return to default view"]')).toBeNull();
 
     // Drag across an open cell: must NOT fire tap, MUST reveal Live button
     act(() => {
@@ -80,13 +80,13 @@ it('dragging pans without firing tap, shows Live button, and Live button / doubl
         canvas.dispatchEvent(pointerEvent('pointerup', { clientX: 520, clientY: 285 }));
     });
     expect(tap).not.toHaveBeenCalled();
-    const liveBtn = div.querySelector('button[aria-label="Return to live view"]') as HTMLButtonElement;
+    const liveBtn = div.querySelector('button[aria-label="Return to default view"]') as HTMLButtonElement;
     expect(liveBtn).not.toBeNull();
 
     // Clicking Live snaps back and hides the button once settled
     act(() => liveBtn.click());
     step(500);
-    expect(div.querySelector('button[aria-label="Return to live view"]')).toBeNull();
+    expect(div.querySelector('button[aria-label="Return to default view"]')).toBeNull();
 
     // Drag away again, then double-tap in the past area to snap back
     act(() => {
@@ -94,7 +94,7 @@ it('dragging pans without firing tap, shows Live button, and Live button / doubl
         canvas.dispatchEvent(pointerEvent('pointermove', { clientX: 350, clientY: 300 }));
         canvas.dispatchEvent(pointerEvent('pointerup', { clientX: 350, clientY: 300 }));
     });
-    expect(div.querySelector('button[aria-label="Return to live view"]')).not.toBeNull();
+    expect(div.querySelector('button[aria-label="Return to default view"]')).not.toBeNull();
 
     act(() => {
         canvas.dispatchEvent(pointerEvent('pointerdown', { clientX: 100, clientY: 300 }));
@@ -103,7 +103,7 @@ it('dragging pans without firing tap, shows Live button, and Live button / doubl
         canvas.dispatchEvent(pointerEvent('pointerup', { clientX: 102, clientY: 301 }));
     });
     step(1000);
-    expect(div.querySelector('button[aria-label="Return to live view"]')).toBeNull();
+    expect(div.querySelector('button[aria-label="Return to default view"]')).toBeNull();
 });
 
 it('wheel zoom and two-finger pinch zoom never fire cell taps', async () => {
@@ -116,7 +116,7 @@ it('wheel zoom and two-finger pinch zoom never fire cell taps', async () => {
     act(() => {
         canvas.dispatchEvent(new WheelEvent('wheel', { bubbles: true, cancelable: true, deltaY: -240, clientX: 450, clientY: 285 }));
     });
-    expect(div.querySelector('button[aria-label="Return to live view"]')).not.toBeNull();
+    expect(div.querySelector('button[aria-label="Return to default view"]')).not.toBeNull();
 
     // Two-finger pinch over an open cell does not tap
     act(() => {
@@ -150,4 +150,19 @@ it('a sideways trackpad swipe pans, and a vertical wheel zooms both directions w
     const args = zoom.mock.calls[0];
     expect(args).toHaveLength(3);
     expect(args[0]).toBeGreaterThan(1);
+});
+
+it('the return-to-default button is icon only and appears after zooming', async () => {
+    const { div, root, tap, step } = setupBoard();
+    await act(async () => root.render(<BoardCanvas onTapCell={tap} />));
+    step(0);
+    const canvas = div.querySelector('canvas')!;
+    expect(div.querySelector('button[aria-label="Return to default view"]')).toBeNull();
+    act(() => {
+        canvas.dispatchEvent(new WheelEvent('wheel', { bubbles: true, cancelable: true, deltaY: -240, clientX: 450, clientY: 285 }));
+    });
+    const btn = div.querySelector('button[aria-label="Return to default view"]') as HTMLButtonElement;
+    expect(btn).not.toBeNull();
+    expect(btn.textContent?.trim()).toBe('');
+    expect(btn.querySelector('svg')).not.toBeNull();
 });

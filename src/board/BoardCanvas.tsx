@@ -321,7 +321,8 @@ export function BoardCanvas({ onTapCell, flash }: {
             {showLiveButton && (
                 <button
                     type="button"
-                    aria-label="Return to live view"
+                    aria-label="Return to default view"
+                    title="Back to the live price at the default size"
                     onClick={() => runtime.current?.snapToLive()}
                     style={{
                         position: 'absolute',
@@ -329,33 +330,26 @@ export function BoardCanvas({ onTapCell, flash }: {
                         left: '50%',
                         transform: 'translateX(-50%)',
                         zIndex: 10,
+                        width: 40,
+                        height: 40,
                         display: 'inline-flex',
                         alignItems: 'center',
-                        gap: 6,
-                        padding: '5px 12px',
+                        justifyContent: 'center',
+                        padding: 0,
                         borderRadius: 999,
                         border: `1.5px solid ${THEME.ink}`,
                         background: THEME.ink,
                         color: THEME.paper,
-                        fontFamily: THEME.font,
-                        fontSize: 11,
-                        fontWeight: 700,
-                        letterSpacing: '0.04em',
                         cursor: 'pointer',
                         boxShadow: '0 2px 8px rgba(29, 27, 24, 0.22)',
                     }}
                 >
-                    <span
-                        aria-hidden="true"
-                        style={{
-                            width: 7,
-                            height: 7,
-                            borderRadius: '50%',
-                            background: THEME.winOnInk,
-                            display: 'inline-block',
-                        }}
-                    />
-                    Live
+                    {/* crosshair: back to tracking the live price at the default box size */}
+                    <svg aria-hidden="true" viewBox="0 0 24 24" width={20} height={20} fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round">
+                        <circle cx="12" cy="12" r="6.5" />
+                        <circle cx="12" cy="12" r="1.8" fill={THEME.winOnInk} stroke="none" />
+                        <path d="M12 2.5v3.5M12 18v3.5M2.5 12H6M18 12h3.5" />
+                    </svg>
                 </button>
             )}
         </div>

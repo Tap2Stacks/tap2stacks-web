@@ -369,9 +369,14 @@ export class BoardCamera {
 
     this.zoom = nextZ;
 
-    // In live-follow mode, keep auto-follow active so zooming out to see 2 min ahead stays live
+    // Zooming pauses tracking: start from the live view, then hold still where the player zoomed.
+    // The return-to-default button (snapToLive) resumes tracking at the default box size.
     if (this.following || this.rawViewNowMs === null || this.rawCenterPrice === null) {
-      return;
+      this.rawViewNowMs = nowMs;
+      this.rawCenterPrice = liveCenterPrice;
+      this.following = false;
+      this.vxPxPerMs = 0;
+      this.vyPxPerMs = 0;
     }
 
     // Keep the world (ts, price) directly under (anchorX, anchorY) stationary

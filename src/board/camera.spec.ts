@@ -241,14 +241,14 @@ describe("camera zoom, pan transforms and clamps", () => {
     expect(state.moving).toBe(false);
   });
 
-  it("anchors cursor world coordinate when zooming while panned away, and keeps live follow when zooming in live mode", () => {
+  it("anchors cursor world coordinate when zooming, and pauses tracking when zooming from live view", () => {
     const cam = new BoardCamera();
     const initial = cam.step(0, 16, 400_000, 155, desktopMetrics, false);
 
-    // Zooming in live mode keeps auto-follow active
+    // Zooming from live view pauses tracking
     cam.zoomAt(0.5, 600, 200, desktopMetrics, 400_000, 155);
     const zoomedLive = cam.step(16, 16, 400_000, 155, desktopMetrics, false);
-    expect(zoomedLive.isLive).toBe(true);
+    expect(zoomedLive.isLive).toBe(false);
     expect(zoomedLive.isZoomed).toBe(true);
     expect(zoomedLive.viewport.msPerPx).toBeCloseTo(initial.viewport.msPerPx * 2, 4);
     expect(zoomedLive.viewport.pricePerPx).toBeCloseTo(initial.viewport.pricePerPx * 2, 4);
@@ -296,12 +296,21 @@ describe("camera zoom, pan transforms and clamps", () => {
     expect(timeToX(viewport, 400_000 + 5_000) - timeToX(viewport, 400_000)).toBeCloseTo(60, 4);
   });
 
-  it("stays live while zooming in follow mode", () => {
+  it("pauses tracking the price when zooming from live view, keeping the point under the cursor", () => {
     const cam = new BoardCamera();
-    cam.zoomAt(0.7, 900, 100, liveDesktop, 10_000, 155);
-    const r = cam.step(0, 16, 10_000, 155, liveDesktop, false);
-    expect(r.isLive).toBe(true);
+    const m = { ...liveDesktop, minSeriesPrice: 154.7, maxSeriesPrice: 155.3 }; // 20 quoted rows around 155
+    const before = cam.step(0, 16, 10_000, 155, m, false);
+    const ts = xToTime(before.viewport, 900);
+    const price = yToPrice(before.viewport, 100);
+    cam.zoomAt(0.7, 900, 100, m, 10_000, 155);
+    const r = cam.step(16, 16, 10_000, 155, m, true);
+    expect(cam.isFollowing).toBe(false);
+    expect(r.isLive).toBe(false);
     expect(r.isZoomed).toBe(true);
-    expect(cam.isFollowing).toBe(true);
+    expect(xToTime(r.viewport, 900)).toBeCloseTo(ts, 1);
+    expect(yToPrice(r.viewport, 100)).toBeCloseTo(price, 5);
+    // The price moves on while paused: the view does not follow it
+    const later = cam.step(32, 16, 12_000, 155.5, m, true);
+    expect(later.viewport.centerPrice).toBeCloseTo(r.viewport.centerPrice, 9);
   });
 });

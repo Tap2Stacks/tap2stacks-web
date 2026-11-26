@@ -114,6 +114,14 @@ describe('drawBoard', () => {
         expect(backingFill).toBe(true);
     });
 
+    it('skips a left price-axis label that would cover the price line, keeping the others', () => {
+        const { ctx, calls } = recordingContext();
+        // The line starts at (0, 300), exactly where the 155.00 label sits; 155.03 sits at y = 270
+        drawBoard(ctx, scene);
+        expect(calls.some(c => c.name === 'fillText' && c.args[0] === '155.00' && c.args[1] === 5)).toBe(false);
+        expect(calls.some(c => c.name === 'fillText' && c.args[0] === '155.03' && c.args[1] === 5)).toBe(true);
+    });
+
     it('clips cells before the reserved right gutter and places the live price tag cleanly inside the gutter', () => {
         const { ctx, calls } = recordingContext();
         drawBoard(ctx, {

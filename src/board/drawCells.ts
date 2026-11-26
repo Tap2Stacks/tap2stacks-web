@@ -7,6 +7,9 @@ import { formatLodMultiplier, labelFontPx, type CellLodPlan } from "./lod";
 /** Grid line thickness in CSS px: thin, but a full device pixel on 1x screens. */
 const GRID_LINE_PX = 1;
 
+/** A column clipped by the plot edge still gets its (faded) label once this share of it is visible. */
+const MIN_LABEL_VISIBLE = 0.6;
+
 function smoothstep(edge0: number, edge1: number, x: number): number {
   const t = Math.max(0, Math.min(1, (x - edge0) / Math.max(1e-6, edge1 - edge0)));
   return t * t * (3 - 2 * t);
@@ -109,13 +112,15 @@ export function drawCellLabels(
     const visFracX = visW / Math.max(1, r.w);
     const clippedRight = r.x + r.w > plotRight + 0.5;
     const clippedLeft = r.x < -0.5;
-    if ((clippedRight || clippedLeft) && visFracX < 0.85) continue;
+    if ((clippedRight || clippedLeft) && visFracX < MIN_LABEL_VISIBLE) continue;
 
     const visH = Math.min(r.y + r.h, plotBottom) - Math.max(r.y, 0);
     const visFracY = visH / Math.max(1, r.h);
     if (visFracY < 0.7) continue;
 
-    const textEdgeFade = clippedRight ? smoothstep(0.85, 0.98, visFracX) : 1;
+    const textEdgeFade = clippedRight ? smoothstep(MIN_LABEL_VISIBLE, 0.95, visFracX) : 1;
+    // Centre the label in the visible part so a clipped edge column never shows a cut-off number
+    const labelX = (Math.max(r.x, 0) + Math.min(r.x + r.w, plotRight)) / 2;
     const emphasis = payoutEmphasis(tile.multiplier);
     const fontSize = labelFontPx(plan.textMode, r.w);
 
@@ -124,7 +129,7 @@ export function drawCellLabels(
     ctx.font = `${emphasis.fontWeight} ${fontSize}px ${THEME.font}`;
     ctx.fillText(
       formatLodMultiplier(tile.multiplier, plan.textMode),
-      r.x + r.w / 2,
+      labelX,
       r.y + r.h / 2,
     );
   }

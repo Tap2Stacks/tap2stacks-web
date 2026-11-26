@@ -16,6 +16,9 @@ import { curve, drawLiveDot, drawPriceLine, TAIL_MS } from './drawLine';
 import { planCellLod } from './lod';
 
 export const SETTLEMENT_DURATION_MS = 1200;
+/** Left strip where price-axis label chips sit, and how close the line may come before a label is skipped. */
+const AXIS_LABEL_ZONE_PX = 56;
+const LABEL_LINE_CLEARANCE_PX = 9;
 export type { BoardThemeMode };
 
 export interface BoardScene {
@@ -104,6 +107,7 @@ function drawPriceAxisLabels(
     step: number,
     bp: BoardPalette,
     avoidLeftY: number | null,
+    lineYsUnderLabels: number[] = [],
 ): void {
     const bottom = plotHeight(v);
     ctx.save();
@@ -115,6 +119,8 @@ function drawPriceAxisLabels(
         const y = priceToY(v, price);
         if (y < 8 || y > bottom - 8 || y - lastY < 28) continue;
         if (avoidLeftY !== null && Math.abs(y - avoidLeftY) < 16) continue;
+        // The price line wins: a label chip that would hide it is skipped
+        if (lineYsUnderLabels.some(lineY => Math.abs(lineY - y) < LABEL_LINE_CLEARANCE_PX)) continue;
         const label = formatBoardPrice(price, step);
         const measured = ctx.measureText?.(label)?.width;
         const labelW = Number.isFinite(measured) && measured > 0 ? Math.min(measured, label.length * 7 + 4) : label.length * 6;
@@ -464,7 +470,8 @@ export function drawBoard(ctx: CanvasRenderingContext2D, scene: BoardScene): voi
         scene.livePrice > 0 && pannedAway && liveX < 0
             ? Math.max(12, Math.min(plotBottom - 12, rawY))
             : null;
-    drawPriceAxisLabels(ctx, guidePrices, v, step, bp, avoidLeftY);
+    const lineYsUnderLabels = scene.line.filter(p => p.x <= AXIS_LABEL_ZONE_PX).map(p => p.y);
+    drawPriceAxisLabels(ctx, guidePrices, v, step, bp, avoidLeftY, lineYsUnderLabels);
 
     // Draw live price tag (in right gutter) or compact axis edge marker (when panned away)
     if (scene.livePrice > 0) {

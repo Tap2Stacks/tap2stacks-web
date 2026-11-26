@@ -132,13 +132,13 @@ it('keeps the same square 60 px phone boxes when switching between a 24-window a
         frame(0);
         const nvdaVp = runtime.viewport!;
         expect(timeToX(nvdaVp, nvdaVp.nowMs + 5000) - timeToX(nvdaVp, nvdaVp.nowMs)).toBeCloseTo(60, 6);
-        expect(timeToX(nvdaVp, nvdaVp.nowMs)).toBeCloseTo(plotWidth(nvdaVp) * 0.35, 6);
+        expect(timeToX(nvdaVp, nvdaVp.nowMs)).toBeCloseTo(plotWidth(nvdaVp) * 0.22, 6);
 
         useGameStore.setState({ ticker: 'TSLA', currentPrice: 250.04 });
         frame(16);
         const tslaVp = runtime.viewport!;
         expect(timeToX(tslaVp, tslaVp.nowMs + 5000) - timeToX(tslaVp, tslaVp.nowMs)).toBeCloseTo(60, 6);
-        expect(timeToX(tslaVp, tslaVp.nowMs)).toBeCloseTo(plotWidth(tslaVp) * 0.35, 6);
+        expect(timeToX(tslaVp, tslaVp.nowMs)).toBeCloseTo(plotWidth(tslaVp) * 0.22, 6);
     } finally {
         runtime.dispose();
     }

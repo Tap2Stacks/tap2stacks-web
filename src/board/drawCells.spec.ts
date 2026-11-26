@@ -31,6 +31,20 @@ describe("drawCells", () => {
     expect(calls.some((c) => c.name === "fillRect")).toBe(false);
   });
 
+  it("labels a column that is 70% inside the plot, faded, so phones show one more open column", () => {
+    const { ctx, calls } = recordingContext();
+    const bp = boardPalette("light");
+    // plotWidth = 942, NOW at x = 282.6; this 100 px cell spans 872..972, so 70 px are visible
+    const v = { ...vp, rightGutter: 58 };
+    const partial = testCell({ multiplier: 4.1, timeWindowStart: 39_470, timeWindowEnd: 44_470 });
+    drawCellLabels(ctx, planCellLod([partial], v, 0.03), v, "light", bp);
+
+    const label = calls.find((c) => c.name === "fillText" && c.args[0] === "x4.1");
+    expect(label).toBeDefined();
+    expect(label!.alpha ?? 1).toBeGreaterThan(0);
+    expect(label!.alpha ?? 1).toBeLessThan(0.9);
+  });
+
   it("draws nothing for locked cells (< 5 s ahead)", () => {
     const { ctx, calls } = recordingContext();
     const bp = boardPalette("light");

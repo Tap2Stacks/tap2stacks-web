@@ -22,5 +22,5 @@ export function boardScale(
   if (!isPhone) {
     return { nowFraction: 0.38, cellPx: DESKTOP_CELL_PX, rightGutter: 58, bottomGutter: TIME_AXIS_HEIGHT };
   }
-  return { nowFraction: 0.35, cellPx: PHONE_CELL_PX, rightGutter: 50, bottomGutter: TIME_AXIS_HEIGHT };
+  return { nowFraction: 0.22, cellPx: PHONE_CELL_PX, rightGutter: 50, bottomGutter: TIME_AXIS_HEIGHT };
 }

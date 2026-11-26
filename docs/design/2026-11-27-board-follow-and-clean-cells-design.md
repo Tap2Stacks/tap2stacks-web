@@ -43,5 +43,7 @@ The price line should be the main thing on the board, like the clean tap-trading
 
 **Line.** Same smoothing as today. Slightly thicker stroke; the last few seconds are drawn in gold, fading into ink; the live dot gets a soft gold halo with the existing pulse. The dashed live-price guide gets fainter.
 
+**Phone layout (owner's call after review, 2026-11-27).** On phones NOW moves from 35% to 22% of the plot width, so 3-4 open columns fit beside the live dot instead of 2. Desktop stays at 38%.
+
 ## Left to the builder
 Exact alphas, line widths, tail length, halo size, emphasis curve and the hover fade timing, tuned by eye on desktop and phone screenshots. How tests are split.

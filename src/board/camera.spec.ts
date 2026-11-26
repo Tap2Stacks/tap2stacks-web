@@ -49,7 +49,7 @@ const liveDesktop: CameraMetrics = {
 const smallPhone: CameraMetrics = {
   width: 375,
   height: 500,
-  nowFraction: 0.35,
+  nowFraction: 0.22,
   priceStep: 0.03,
   cellPx: 60,
   quotedRows: 20,
@@ -426,11 +426,11 @@ describe("camera zoom, pan transforms and clamps", () => {
     expect(priceToY(done.viewport, 155)).toBeCloseTo(300, 4);
   });
 
-  it("places NOW at 35% of a 375 px phone plot with 60 px boxes before the gutter", () => {
+  it("places NOW at 22% of a 375 px phone plot with 60 px boxes before the gutter", () => {
     const cam = new BoardCamera();
     const { viewport } = cam.step(0, 16, 400_000, 155, smallPhone, false);
     expect(viewport.rightGutter).toBe(50);
-    expect(timeToX(viewport, 400_000)).toBeCloseTo(325 * 0.35, 4);
+    expect(timeToX(viewport, 400_000)).toBeCloseTo(325 * 0.22, 4);
     expect(timeToX(viewport, 400_000 + 5_000) - timeToX(viewport, 400_000)).toBeCloseTo(60, 4);
   });
 });

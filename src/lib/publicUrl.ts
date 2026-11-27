@@ -1,4 +1,4 @@
-export const DEFAULT_PUBLIC_URL = "https://45-77-250-147.sslip.io";
+export const DEFAULT_PUBLIC_URL = "https://tap2stacks.vercel.app";
 
 export function resolvePublicUrl(rawUrl?: string): string {
   const candidate = rawUrl?.trim() || DEFAULT_PUBLIC_URL;

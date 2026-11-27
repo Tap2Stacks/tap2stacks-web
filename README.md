@@ -4,7 +4,7 @@ The player app for **tap2stacks**, a tap-to-predict game on live stock prices, b
 
 Pick a stock (NVDA, TSLA), watch the live chart and tap a cell on the grid: a price row and a 5-second window. If the price touches that row during the window, the tap pays its multiplier. Stakes are test USDC on Base Sepolia; every settled tap can be checked against a Merkle root anchored on-chain.
 
-Live (Base Sepolia testnet): <https://45-77-250-147.sslip.io>
+Live (Base Sepolia testnet): <https://tap2stacks.vercel.app>
 
 | Repo | Role |
 |---|---|

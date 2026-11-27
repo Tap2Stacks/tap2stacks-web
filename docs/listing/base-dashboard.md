@@ -13,7 +13,7 @@ This guide contains every field and asset required to register **tap2stacks** on
 | **Long Description** | `tap2stacks is a real-time price target grid game running on Base Sepolia testnet. Choose a market feed, set a stake in non-monetary test USDC (tUSDC), and tap future 5-second price cells on the live board. Deposits, withdrawals, and faucet claims use Base Sepolia smart contracts with EIP-5792 sponsored calls and verifiable on-chain settlement proofs. Testnet preview only; no real money; 18+ and non-US.` | Clearly discloses testnet/non-monetary status and regional/age gates |
 | **Category** | `Games` (or `Gaming / Prediction`) | Matches the Base Dashboard category picker |
 | **Tags / Keywords** | `gaming`, `testnet`, `base-sepolia`, `prediction`, `onchain` | Optional discovery tags if prompted |
-| **Website / Home URL** | `https://45-77-250-147.sslip.io` | Controlled by `VITE_PUBLIC_URL`; update in both build env and Base Dashboard if moved to a custom domain |
+| **Website / Home URL** | `https://tap2stacks.vercel.app` | Controlled by `VITE_PUBLIC_URL`; update in both build env and Base Dashboard if moved to a custom domain |
 | **Network** | `Base Sepolia` (`84532`) | Testnet preview deployment |
 | **Base Builder Code** | `bc_ymo2v08a` | Configured via `VITE_BASE_BUILDER_CODE=bc_ymo2v08a` |
 | **ERC-8021 Data Suffix** | `0x62635f796d6f32763038610b0080218021802180218021802180218021` | Generated automatically by `builderCodeSuffix("bc_ymo2v08a")` |
@@ -41,10 +41,10 @@ PLAYWRIGHT_BROWSERS_PATH=$HOME/.local/share/ms-playwright node scripts/generate-
 
 ## 3. Build Environment Variables
 
-Set these public variables when building for `https://45-77-250-147.sslip.io` (or update `VITE_PUBLIC_URL` when moving to a custom domain):
+Set these public variables when building for `https://tap2stacks.vercel.app` (or update `VITE_PUBLIC_URL` when moving to a custom domain):
 
 ```env
-VITE_PUBLIC_URL=https://45-77-250-147.sslip.io
+VITE_PUBLIC_URL=https://tap2stacks.vercel.app
 VITE_BASE_BUILDER_CODE=bc_ymo2v08a
 VITE_CHAIN_ID=84532
 VITE_RPC_URL=https://sepolia.base.org
@@ -52,7 +52,7 @@ VITE_RPC_URL=https://sepolia.base.org
 
 ## 4. Exact Steps to Register & Verify
 
-1. **Deploy the web app** at `https://45-77-250-147.sslip.io` (built with `VITE_PUBLIC_URL=https://45-77-250-147.sslip.io` and `VITE_BASE_BUILDER_CODE=bc_ymo2v08a`). Confirm `https://45-77-250-147.sslip.io/brand/icon.png` and `https://45-77-250-147.sslip.io/brand/og.png` return HTTP 200 and `<meta property="og:image">` in `index.html` points to `https://45-77-250-147.sslip.io/brand/og.png`.
+1. **Deploy the web app** at `https://tap2stacks.vercel.app` (built with `VITE_PUBLIC_URL=https://tap2stacks.vercel.app` and `VITE_BASE_BUILDER_CODE=bc_ymo2v08a`). Confirm `https://tap2stacks.vercel.app/brand/icon.png` and `https://tap2stacks.vercel.app/brand/og.png` return HTTP 200 and `<meta property="og:image">` in `index.html` points to `https://tap2stacks.vercel.app/brand/og.png`.
 2. **Open the Base Dashboard** at [base.dev](https://www.base.dev) and sign in with the project owner wallet that holds/manages Builder Code `bc_ymo2v08a`.
 3. **Verify Builder Code ownership:** Go to **Settings -> Project Settings -> Builder Code** and confirm the active project's code matches `bc_ymo2v08a` (ERC-8021 suffix `0x62635f796d6f32763038610b0080218021802180218021802180218021`). If a new project is created, update `VITE_BASE_BUILDER_CODE` in `.env` and rebuild.
 4. **Fill in the App Listing form** using the table in Section 1 above and upload:
@@ -60,9 +60,9 @@ VITE_RPC_URL=https://sepolia.base.org
    - Banner (if requested): `public/brand/og.png` (`1200x630`)
    - Screenshots: `docs/listing/screenshots/1-board.png`, `2-wallet.png`, `3-history.png` (`1284x2778`)
    - Support / Contact: replace `<REPLACE_WITH_SUPPORT_EMAIL_OR_URL>` with the support email or contact URL
-5. **Verify domain & ownership** if prompted by the Base Dashboard (follow the dashboard's domain ownership check or wallet signature prompt for `45-77-250-147.sslip.io`).
+5. **Verify domain & ownership** if prompted by the Base Dashboard (follow the dashboard's domain ownership check or wallet signature prompt for `tap2stacks.vercel.app`).
 6. **Smoke test inside Coinbase Wallet mobile browser (iPhone 12+ / Android):**
-   - Open `https://45-77-250-147.sslip.io` inside Coinbase Wallet's in-app browser.
+   - Open `https://tap2stacks.vercel.app` inside Coinbase Wallet's in-app browser.
    - Confirm the wallet picker highlights **Coinbase Wallet (In-app browser wallet)** at the top via EIP-6963 (`com.coinbase.wallet`).
    - Run a faucet claim or deposit on Base Sepolia and verify on `sepolia.basescan.org` that the transaction input calldata ends with `62635f796d6f32763038610b0080218021802180218021802180218021` (and check attribution in Base Dashboard analytics).
    - Confirm top header / bottom nav clear the iOS notch & home bar and left-edge swipe-back still navigates back cleanly.

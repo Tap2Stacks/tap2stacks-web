@@ -2,7 +2,8 @@ import { describe, expect, it } from "vitest";
 import { DEFAULT_PUBLIC_URL, resolvePublicUrl } from "./publicUrl";
 
 describe("resolvePublicUrl", () => {
-  it("defaults to the tentative sslip.io URL", () => {
+  it("defaults to the public Vercel address", () => {
+    expect(DEFAULT_PUBLIC_URL).toBe("https://tap2stacks.vercel.app");
     expect(resolvePublicUrl(undefined)).toBe(DEFAULT_PUBLIC_URL);
     expect(resolvePublicUrl("   ")).toBe(DEFAULT_PUBLIC_URL);
   });
